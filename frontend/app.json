@@ -1,20 +1,20 @@
 {
   "expo": {
-    "name": "music-app",
-    "slug": "music-app",
-    "version": "1.0.0",
+    "name": "Yaazh Music",
+    "slug": "yaazh-music",
+    "version": "1.2.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#11110F"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.music.app",
+      "bundleIdentifier": "com.yaazh.music",
       "infoPlist": {
         "UIBackgroundModes": [
           "audio"
@@ -22,7 +22,7 @@
       }
     },
     "android": {
-      "package": "com.music.app",
+      "package": "com.yaazh.music",
       "permissions": [
         "FOREGROUND_SERVICE",
         "FOREGROUND_SERVICE_AUDIO_PLAYBACK",
@@ -30,12 +30,15 @@
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#11110F"
       },
       "edgeToEdgeEnabled": true
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-font"
+    ]
   }
 }

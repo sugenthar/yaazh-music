@@ -1,0 +1,65 @@
+import { z } from "zod";
+
+export const registerSchema = z.object({
+  name: z
+    .string({ required_error: "Name is required" })
+    .min(1, "Name is required")
+    .max(100, "Name is too long"),
+  email: z
+    .string({ required_error: "Email is required" })
+    .email("Invalid email address"),
+  password: z
+    .string({ required_error: "Password is required" })
+    .min(6, "Password must be at least 6 characters")
+    .max(100, "Password is too long"),
+});
+
+export const loginSchema = z.object({
+  email: z
+    .string({ required_error: "Email is required" })
+    .email("Invalid email address"),
+  password: z.string({ required_error: "Password is required" }),
+});
+
+export const idParamSchema = z.object({
+  id: z.coerce.number().int().positive("Invalid id"),
+});
+
+export const songIdParamSchema = z.object({
+  songId: z.coerce.number().int().positive("Invalid song id"),
+});
+
+export const playlistNameSchema = z.object({
+  name: z
+    .string({ required_error: "Playlist name is required" })
+    .trim()
+    .min(1, "Playlist name is required")
+    .max(100, "Playlist name is too long"),
+  description: z.string().max(500).optional(),
+});
+
+export const playlistUpdateSchema = z.object({
+  name: z.string().min(1, "Playlist name cannot be empty").max(100).optional(),
+  description: z.string().max(500).nullable().optional(),
+});
+
+export const addPlaylistSongSchema = z.object({
+  songId: z.coerce.number().int().positive("Invalid song id"),
+});
+
+export const songIdBodySchema = z.object({
+  songId: z.coerce.number().int().positive("Invalid song id"),
+});
+
+export const searchQuerySchema = z.object({
+  q: z.string().min(1, "Search query is required").max(200),
+});
+
+export const moodCreateSchema = z.object({
+  text: z
+    .string({ required_error: "Mood text is required" })
+    .min(1, "Mood text is required")
+    .max(500, "Mood text is too long"),
+  songTitle: z.string().max(200).optional(),
+  color: z.string().max(20).optional(),
+});
