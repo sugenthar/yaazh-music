@@ -3,6 +3,10 @@ import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import QueueManager from './QueueManager';
 import StorageService from '../services/storage';
 import SongsService from '../services/songs';
+import { useAuth } from '../store/AuthContext';
+import { STRINGS } from '../constants/strings';
+
+console.log('[Yaazh][BOOT] PlayerContext module evaluated');
 
 const PlayerContext = createContext(null);
 
@@ -19,11 +23,27 @@ export const PlayerProvider = ({ children }) => {
   const [songs, setSongs] = useState([]);
   const [isShuffle, setIsShuffle] = useState(false);
   const [repeatMode, setRepeatMode] = useState('off');
+  const [playbackError, setPlaybackError] = useState(null);
+
+  const renderLoggedRef = useRef(false);
+  if (!renderLoggedRef.current) {
+    renderLoggedRef.current = true;
+    console.log('[Yaazh][BOOT] PlayerProvider first render');
+  }
+
+  const hasAudio = (song) => Boolean(song && typeof song.url === 'string' && song.url.length > 0);
 
   const queueManagerRef = useRef(new QueueManager([]));
   const playerReplacement = useAudioPlayer();
   const player = playerReplacement;
   const status = useAudioPlayerStatus(player);
+  const { isAuthenticated } = useAuth();
+
+  // Only ever resume a track that we deliberately asked to start, and never
+  // more than once per replace. Guards against overlapping play() calls when
+  // the user rapidly switches songs and against auto-play on mount.
+  const loadGenerationRef = useRef(0);
+  const pendingPlayRef = useRef(null);
 
   useEffect(() => {
     queueManagerRef.current.setQueue(songs);
@@ -60,14 +80,21 @@ export const PlayerProvider = ({ children }) => {
   const positionMs = ((status?.currentTime ?? 0) * 1000);
   const durationMs = ((status?.duration ?? 0) * 1000);
   const progress = status?.duration > 0 ? (status?.currentTime ?? 0) / status?.duration : 0;
-  const isLoading = status?.loading ?? false;
 
   const playSong = useCallback(
     (song) => {
       if (!song) return;
+      if (!hasAudio(song)) {
+        setPlaybackError(STRINGS.player.audioUnavailable);
+        return;
+      }
       const isSameSong = currentSong?.id === song.id;
 
       if (isSameSong) {
+        setPlaybackError(null);
+        if (pendingPlayRef.current?.id === song.id) {
+          return;
+        }
         if (isPlaying) {
           player.pause();
         } else {
@@ -80,22 +107,54 @@ export const PlayerProvider = ({ children }) => {
       }
 
       setCurrentSong(song);
-      SongsService.addToHistory(song.id);
-      player.replace({
-        uri: song.url,
-        metadata: {
-          title: song.title,
-          artist: song.artist,
-          artwork: song.artwork,
-        },
-      });
-      player.play();
+      setPlaybackError(null);
+      if (isAuthenticated) {
+        SongsService.addToHistory(song.id);
+      }
+      const generation = loadGenerationRef.current + 1;
+      loadGenerationRef.current = generation;
+      pendingPlayRef.current = { id: song.id, generation };
+      try {
+        player.pause();
+        player.replace({
+          uri: song.url,
+          metadata: {
+            title: song.title,
+            artist: song.artist,
+            artwork: song.artwork,
+          },
+        });
+      } catch (e) {
+        console.log('Failed to start playback:', e);
+        pendingPlayRef.current = null;
+        setPlaybackError(STRINGS.player.loadFailed);
+      }
     },
-    [currentSong, isPlaying, player, status]
+    [currentSong, isPlaying, player, status, isAuthenticated]
   );
+
+  useEffect(() => {
+    const pending = pendingPlayRef.current;
+    if (
+      status?.isLoaded &&
+      pending &&
+      pending.id === currentSong?.id &&
+      pending.generation === loadGenerationRef.current &&
+      !isPlaying &&
+      !playbackError
+    ) {
+      pendingPlayRef.current = null;
+      player.play();
+    }
+  }, [status?.isLoaded, currentSong?.id, isPlaying, playbackError, player]);
 
   const togglePlay = useCallback(() => {
     if (!currentSong) return;
+    if (!hasAudio(currentSong)) {
+      setPlaybackError(STRINGS.player.audioUnavailable);
+      return;
+    }
+    setPlaybackError(null);
     if (isPlaying) {
       player.pause();
     } else {
@@ -107,14 +166,20 @@ export const PlayerProvider = ({ children }) => {
   }, [currentSong, isPlaying, player, status]);
 
   const playNext = useCallback(() => {
-    const nextSong = queueManagerRef.current.getNext({ shuffle: isShuffle, repeatMode });
+    const maxTries = (songs?.length || 0) + 1;
+    let tries = 0;
+    let nextSong = queueManagerRef.current.getNext({ shuffle: isShuffle, repeatMode });
+    while (nextSong && !hasAudio(nextSong) && tries < maxTries) {
+      tries += 1;
+      nextSong = queueManagerRef.current.getNext({ shuffle: isShuffle, repeatMode });
+    }
     if (nextSong) {
       playSong(nextSong);
     } else {
       player.pause();
       player.seekTo(0);
     }
-  }, [isShuffle, repeatMode, playSong, player]);
+  }, [songs, isShuffle, repeatMode, playSong, player]);
 
   useEffect(() => {
     if (status?.didJustFinish) {
@@ -157,16 +222,21 @@ export const PlayerProvider = ({ children }) => {
     [player, status]
   );
 
+  const clearPlaybackError = useCallback(() => {
+    setPlaybackError(null);
+  }, []);
+
   const value = {
     currentSong,
     isPlaying,
     positionMs,
     durationMs,
     progress,
-    isLoading,
     isShuffle,
     repeatMode,
     songs,
+    playbackError,
+    clearPlaybackError,
     playSong,
     togglePlay,
     playNext,

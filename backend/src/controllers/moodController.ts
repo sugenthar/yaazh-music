@@ -27,7 +27,7 @@ export const createMood = asyncHandler(async (req: Request, res: Response) => {
     .prepare(
       "INSERT INTO moods (text, user_id, user_name, color, song_title) VALUES (?, ?, ?, ?, ?)"
     )
-    .run(text.trim(), userId, userName, color || "#1DB954", songTitle?.trim() || null);
+    .run(text.trim(), userId, userName, color || "#D8C5A8", songTitle?.trim() || null);
 
   const mood = db
     .prepare("SELECT * FROM moods WHERE id = ?")

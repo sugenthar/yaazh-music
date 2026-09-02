@@ -1,15 +1,18 @@
 import { Request, Response } from "express";
 import { getDb } from "../config/database";
 import { AuthRequest } from "../middleware/auth";
-import { resolveSongId } from "../services/songService";
-import { asyncHandler, ok, AppError } from "../utils/helpers";
+import { resolveSongSnapshot } from "../modules/music/music.service";
+import { asyncHandler, ok } from "../utils/helpers";
+
+const snapshotJson = (song: { id: string }): string => JSON.stringify(song);
 
 export const likeSong = asyncHandler(async (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
   const userId = authReq.user!.id;
-  const songId = Number(req.params.songId);
+  const songId = req.params.songId;
+  const rawSong = (req.body as { song?: unknown } | undefined)?.song;
 
-  await resolveSongId(songId);
+  const song = await resolveSongSnapshot(songId, rawSong);
 
   const db = getDb();
   const existing = db
@@ -20,14 +23,16 @@ export const likeSong = asyncHandler(async (req: Request, res: Response) => {
     return ok(res, { liked: true, songId }, 200);
   }
 
-  db.prepare("INSERT INTO likes (user_id, song_id) VALUES (?, ?)").run(userId, songId);
+  db.prepare(
+    "INSERT INTO likes (user_id, song_id, song_json) VALUES (?, ?, ?)"
+  ).run(userId, songId, song ? snapshotJson(song) : null);
   ok(res, { liked: true, songId }, 201);
 });
 
 export const unlikeSong = asyncHandler(async (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
   const userId = authReq.user!.id;
-  const songId = Number(req.params.songId);
+  const songId = req.params.songId;
 
   const db = getDb();
   db.prepare("DELETE FROM likes WHERE user_id = ? AND song_id = ?").run(userId, songId);
@@ -41,18 +46,29 @@ export const getLibrary = asyncHandler(async (req: Request, res: Response) => {
 
   const likedRows = db
     .prepare(
-      `SELECT s.* FROM songs s
-       INNER JOIN likes l ON l.song_id = s.id
-       WHERE l.user_id = ?
-       ORDER BY l.created_at DESC`
+      `SELECT song_id, song_json, created_at FROM likes
+       WHERE user_id = ?
+       ORDER BY created_at DESC`
     )
-    .all(userId) as unknown[];
+    .all(userId) as { song_id: string; song_json: string | null; created_at: string }[];
+
+  const likedSongs = likedRows.map((row) => {
+    const snapshots = row.song_json ? JSON.parse(row.song_json) : null;
+    return (
+      snapshots || {
+        id: row.song_id,
+        songId: row.song_id,
+        artwork: null,
+        url: null,
+      }
+    );
+  });
 
   const playlistRows = db
     .prepare("SELECT * FROM playlists WHERE user_id = ? ORDER BY created_at DESC")
     .all(userId) as unknown[];
 
-  ok(res, { likedSongs: likedRows, playlists: playlistRows });
+  ok(res, { likedSongs, playlists: playlistRows });
 });
 
 export const getLikedSongIds = asyncHandler(async (req: Request, res: Response) => {
@@ -61,7 +77,7 @@ export const getLikedSongIds = asyncHandler(async (req: Request, res: Response) 
   const db = getDb();
   const rows = db
     .prepare("SELECT song_id FROM likes WHERE user_id = ?")
-    .all(userId) as { song_id: number }[];
+    .all(userId) as { song_id: string }[];
 
   ok(res, { songIds: rows.map((r) => r.song_id) });
 });
@@ -69,7 +85,7 @@ export const getLikedSongIds = asyncHandler(async (req: Request, res: Response) 
 export const isLiked = asyncHandler(async (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
   const userId = authReq.user!.id;
-  const songId = Number(req.params.songId);
+  const songId = req.params.songId;
   const db = getDb();
   const existing = db
     .prepare("SELECT id FROM likes WHERE user_id = ? AND song_id = ?")

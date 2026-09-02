@@ -14,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../store/AuthContext';
 import { useMusic } from '../store/MusicContext';
+import { errorMessage } from '../services/api';
 import TextField from '../components/TextField';
 import PrimaryButton from '../components/PrimaryButton';
 import ArtworkHero from '../components/ArtworkHero';
@@ -67,7 +68,7 @@ const LoginScreen = ({ visible = false, onClose, onSuccess, onGoSignUp }) => {
       reset();
       onSuccess();
     } catch (e) {
-      setServerError(e?.message || STRINGS.errors.serverError);
+      setServerError(errorMessage(e));
     } finally {
       setSubmitting(false);
     }

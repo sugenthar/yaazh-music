@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { getDb } from "../config/database";
 import { AuthRequest } from "../middleware/auth";
-import { resolveSongId } from "../services/songService";
+import { resolveSongSnapshot } from "../modules/music/music.service";
 import { asyncHandler, ok, AppError } from "../utils/helpers";
 
 interface PlaylistRow {
@@ -12,23 +12,38 @@ interface PlaylistRow {
   created_at: string;
 }
 
+interface PlaylistSongRow {
+  song_id: string;
+  song_json: string | null;
+  added_at: string;
+}
+
+const parseSnapshot = (row: PlaylistSongRow) => {
+  if (row.song_json) {
+    const parsed = JSON.parse(row.song_json);
+    if (parsed && parsed.id) return parsed;
+  }
+  return { id: row.song_id, songId: row.song_id };
+};
+
 const toPlaylistResponse = (db: ReturnType<typeof getDb>, row: PlaylistRow) => {
   const songRows = db
     .prepare(
-      `SELECT s.* FROM songs s
-       INNER JOIN playlist_songs ps ON ps.song_id = s.id
-       WHERE ps.playlist_id = ?
-       ORDER BY ps.added_at ASC`
+      `SELECT song_id, song_json, added_at FROM playlist_songs
+       WHERE playlist_id = ?
+       ORDER BY added_at ASC`
     )
-    .all(row.id) as unknown[];
+    .all(row.id) as PlaylistSongRow[];
+
+  const songs = songRows.map(parseSnapshot);
 
   return {
     id: row.id,
     name: row.name,
     description: row.description,
     createdAt: row.created_at,
-    songs: songRows,
-    songCount: songRows.length,
+    songs,
+    songCount: songs.length,
   };
 };
 
@@ -115,14 +130,14 @@ export const addSongToPlaylist = asyncHandler(async (req: Request, res: Response
   const authReq = req as AuthRequest;
   const userId = authReq.user!.id;
   const playlistId = Number(req.params.id);
-  const songId = Number(req.body.songId);
+  const { songId, song: rawSong } = req.body as { songId: string; song?: unknown };
 
   const row = getOwnedPlaylist(userId, playlistId);
   if (!row) {
     throw new AppError("Playlist not found", 404, "PLAYLIST_NOT_FOUND");
   }
 
-  await resolveSongId(songId);
+  const song = await resolveSongSnapshot(songId, rawSong);
 
   const db = getDb();
   const existing = db
@@ -132,10 +147,9 @@ export const addSongToPlaylist = asyncHandler(async (req: Request, res: Response
     return ok(res, { added: true, songId });
   }
 
-  db.prepare("INSERT INTO playlist_songs (playlist_id, song_id) VALUES (?, ?)").run(
-    playlistId,
-    songId
-  );
+  db.prepare(
+    "INSERT INTO playlist_songs (playlist_id, song_id, song_json) VALUES (?, ?, ?)"
+  ).run(playlistId, songId, song ? JSON.stringify(song) : null);
   ok(res, { added: true, songId }, 201);
 });
 
@@ -143,7 +157,7 @@ export const removeSongFromPlaylist = asyncHandler(async (req: Request, res: Res
   const authReq = req as AuthRequest;
   const userId = authReq.user!.id;
   const playlistId = Number(req.params.id);
-  const songId = Number(req.params.songId);
+  const songId = req.params.songId;
 
   const row = getOwnedPlaylist(userId, playlistId);
   if (!row) {

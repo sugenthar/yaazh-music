@@ -20,7 +20,7 @@ import {
 
 const playlistSongParamSchema = z.object({
   id: z.coerce.number().int().positive("Invalid id"),
-  songId: z.coerce.number().int().positive("Invalid song id"),
+  songId: z.string().min(1, "Invalid song id"),
 });
 
 const router = Router();

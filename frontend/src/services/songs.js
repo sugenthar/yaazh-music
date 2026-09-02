@@ -1,25 +1,7 @@
 import api from './api';
+import musicApi from './musicApi';
 
 const GITHUB_SONGS_URL = 'https://raw.githubusercontent.com/sugenthar/songsData/main/songs/song.json';
-
-const DEMO_SONGS = [
-  {
-    id: '1',
-    title: 'Badass - Leo',
-    artist: 'Anirudh Ravichander',
-    artwork: 'https://upload.wikimedia.org/wikipedia/en/7/77/Leo_film_poster.jpg',
-    url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
-    duration: 220,
-  },
-  {
-    id: '2',
-    title: 'Hukum - Jailer',
-    artist: 'Anirudh Ravichander',
-    artwork: 'https://upload.wikimedia.org/wikipedia/en/3/30/Jailer_2023_Tamil_film_poster.jpg',
-    url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3',
-    duration: 210,
-  },
-];
 
 class SongsService {
   constructor() {
@@ -35,12 +17,11 @@ class SongsService {
       if (json.songs && json.songs.length > 0) {
         this.cache = json.songs;
         this.lastFetch = Date.now();
-        return json.songs;
       }
-      return DEMO_SONGS;
+      return this.cache || [];
     } catch (e) {
-      console.log('GitHub fetch failed, using fallback:', e);
-      return this.cache || DEMO_SONGS;
+      console.log('GitHub fetch failed:', e);
+      return this.cache || [];
     }
   }
 
@@ -53,21 +34,24 @@ class SongsService {
 
   async getSongsFromApi() {
     try {
-      const response = await api.get('/api/songs');
-      return response.data.songs || [];
+      return await musicApi.getDefaultSongs(1, 20);
     } catch (e) {
       console.log('API fetch failed, falling back to GitHub:', e);
-      return this.fetchSongsFromGitHub();
+      const fallback = await this.fetchSongsFromGitHub();
+      if (!fallback || fallback.length === 0) {
+        throw Object.assign(new Error('Music service is temporarily unavailable.'), {
+          code: 'MUSIC_PROVIDER_UNAVAILABLE',
+          status: 503,
+        });
+      }
+      return fallback;
     }
   }
 
-  async searchSongs(query) {
+  async searchSongs(query, page = 1, limit = 20) {
     if (!query) return [];
-    const songs = await this.getSongs();
-    return songs.filter(song =>
-      song.title.toLowerCase().includes(query.toLowerCase()) ||
-      song.artist.toLowerCase().includes(query.toLowerCase())
-    );
+    const result = await musicApi.searchSongs(query, page, limit);
+    return result.songs;
   }
 
   async getSongById(id) {

@@ -1,5 +1,9 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import SongsService from '../services/songs';
+import { toUserMessage } from '../services/musicApi';
+import { useAuth } from './AuthContext';
+
+console.log('[Yaazh][BOOT] MusicContext module evaluated');
 
 const MusicContext = createContext(null);
 
@@ -18,17 +22,22 @@ export const MusicProvider = ({ children }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [moods, setMoods] = useState([]);
 
+  const { isAuthenticated } = useAuth();
+
+  useEffect(() => {
+    console.log('[Yaazh][BOOT] MusicProvider mounted');
+  }, []);
+
   const fetchSongs = useCallback(async () => {
     try {
       setIsLoading(true);
       const data = await SongsService.getSongsFromApi();
-      setSongs(data);
+      setSongs(data || []);
       setError(null);
     } catch (e) {
       console.log('Error fetching songs:', e);
-      setError(e.message);
-      const fallback = await SongsService.fetchSongsFromGitHub();
-      setSongs(fallback);
+      setError(toUserMessage(e));
+      setSongs([]);
     } finally {
       setIsLoading(false);
       setRefreshing(false);
@@ -45,13 +54,14 @@ export const MusicProvider = ({ children }) => {
   }, [fetchSongs]);
 
   const loadMoods = useCallback(async () => {
+    if (!isAuthenticated) return;
     try {
       const response = await SongsService.fetchMoods();
       if (response) setMoods(response);
     } catch (e) {
       console.log('Error fetching moods:', e);
     }
-  }, []);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     loadMoods();

@@ -1,10 +1,19 @@
-import React, { useMemo, useState } from 'react';
-import { ScrollView, View, TextInput, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  FlatList,
+  View,
+  TextInput,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Header from '../components/Header';
 import SongCard from '../components/SongCard';
 import { usePlayer } from '../player/PlayerContext';
-import { useMusic } from '../store/MusicContext';
+import { searchSongs as fetchRemoteSongs, MAX_LIMIT, toUserMessage } from '../services/musicApi';
+import { normalizeError } from '../services/api';
 import { colors, typography, radius, spacing } from '../theme';
 import { STRINGS } from '../constants/strings';
 
@@ -19,137 +28,344 @@ const CATEGORIES = [
 
 const SUGGESTIONS = ['Anirudh', 'Hukum', 'Badass', 'Mallipoo', 'Night', 'Focus', 'Jailer'];
 
+const DEBOUNCE_MS = 400;
+
+const mergeUnique = (existing, incoming) => {
+  const seen = new Set(existing.map((s) => s.id));
+  const merged = [...existing];
+  incoming.forEach((s) => {
+    if (!seen.has(s.id)) {
+      seen.add(s.id);
+      merged.push(s);
+    }
+  });
+  return merged;
+};
+
+const distinctArtists = (songs) => {
+  const map = new Map();
+  songs.forEach((s) => {
+    if (s.artist && !map.has(s.artist)) map.set(s.artist, s);
+  });
+  return [...map.values()];
+};
+
 const SearchScreen = ({ openMenu, onOpenAuth }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const { songs } = useMusic();
   const { currentSong, isPlaying, playSong } = usePlayer();
 
-  const filteredSongs = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return [];
-    return songs.filter(s =>
-      s.title.toLowerCase().includes(q) ||
-      s.artist.toLowerCase().includes(q)
-    );
-  }, [songs, searchQuery]);
+  const [results, setResults] = useState([]);
+  const [artists, setArtists] = useState([]);
+  const [page, setPage] = useState(1);
+  const [hasNextPage, setHasNextPage] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
+  const [appendError, setAppendError] = useState(null);
 
-  const topArtists = useMemo(() => {
-    const seen = new Map();
-    filteredSongs.forEach(s => {
-      if (!seen.has(s.artist)) seen.set(s.artist, s);
-    });
-    return [...seen.values()];
-  }, [filteredSongs]);
+  const debounceTimer = useRef(null);
+  const requestSeq = useRef(0);
+  const abortRef = useRef(null);
+  const loadingMoreRef = useRef(false);
+  const resultsRef = useRef([]);
+  const artistsRef = useRef([]);
+
+  const loadPage = useCallback(async (query, targetPage, mode = 'replace') => {
+    const q = query.trim();
+    if (!q) return;
+    const seq = ++requestSeq.current;
+
+    if (abortRef.current) abortRef.current.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    if (mode === 'replace') {
+      setLoading(true);
+      setError(null);
+    } else {
+      loadingMoreRef.current = true;
+      setLoadingMore(true);
+      setAppendError(null);
+    }
+
+    try {
+      const result = await fetchRemoteSongs(q, targetPage, MAX_LIMIT, {
+        signal: controller.signal,
+      });
+      if (seq !== requestSeq.current) return;
+
+      if (mode === 'replace') {
+        resultsRef.current = result.songs;
+        setResults(result.songs);
+        const nextArtists = distinctArtists(result.songs);
+        artistsRef.current = nextArtists;
+        setArtists(nextArtists);
+        setPage(result.page);
+        setHasNextPage(result.hasNextPage);
+      } else {
+        const prev = resultsRef.current;
+        const merged = mergeUnique(prev, result.songs);
+        resultsRef.current = merged;
+        setResults(merged);
+        const nextArtists = distinctArtists([
+          ...artistsRef.current,
+          ...result.songs.filter((s) => s.artist),
+        ]);
+        artistsRef.current = nextArtists;
+        setArtists(nextArtists);
+        const added = merged.length - prev.length;
+        setPage(result.page);
+        setHasNextPage(result.hasNextPage && added > 0);
+      }
+    } catch (e) {
+      if (seq !== requestSeq.current) return;
+      const normalized = normalizeError(e);
+      if (normalized.code === 'ABORTED') return;
+      const message = toUserMessage(e);
+      if (mode === 'replace') {
+        resultsRef.current = [];
+        artistsRef.current = [];
+        setResults([]);
+        setArtists([]);
+        setError(message);
+      } else {
+        setAppendError({ message, page: targetPage });
+      }
+    } finally {
+      if (seq === requestSeq.current) {
+        setLoading(false);
+        loadingMoreRef.current = false;
+        setLoadingMore(false);
+        setRefreshing(false);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (abortRef.current) abortRef.current.abort();
+
+    if (!q) {
+      requestSeq.current += 1;
+      resultsRef.current = [];
+      artistsRef.current = [];
+      setResults([]);
+      setArtists([]);
+      setPage(1);
+      setHasNextPage(false);
+      setLoading(false);
+      loadingMoreRef.current = false;
+      setLoadingMore(false);
+      setRefreshing(false);
+      setError(null);
+      setAppendError(null);
+      return undefined;
+    }
+
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    debounceTimer.current = setTimeout(() => {
+      loadPage(q, 1, 'replace');
+    }, DEBOUNCE_MS);
+
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    };
+  }, [searchQuery, loadPage]);
+
+  const loadMore = useCallback(() => {
+    const q = searchQuery.trim();
+    if (!q || loadingMoreRef.current || loading || !hasNextPage) return;
+    loadPage(q, page + 1, 'append');
+  }, [searchQuery, loading, hasNextPage, page, loadPage]);
+
+  const handleRefresh = useCallback(() => {
+    const q = searchQuery.trim();
+    if (!q) return;
+    setRefreshing(true);
+    loadPage(q, 1, 'replace');
+  }, [searchQuery, loadPage]);
+
+  const isSearching = searchQuery.trim().length > 0;
+  const showEmpty = isSearching && !loading && results.length === 0 && !error;
+
+  const renderHeader = () => (
+    <View style={styles.headerContent}>
+      <Header title={STRINGS.search.placeholder} onProfilePress={onOpenAuth} />
+
+      <View style={styles.searchWrap}>
+        <View style={styles.searchBar}>
+          <Ionicons name="search" size={18} color={colors.textMuted} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder={STRINGS.search.placeholder}
+            placeholderTextColor={colors.textMuted}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            autoCorrect={false}
+            autoCapitalize="none"
+            returnKeyType="search"
+            accessibilityLabel="Search"
+            onSubmitEditing={() => {
+              const q = searchQuery.trim();
+              if (q) loadPage(q, 1, 'replace');
+            }}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity
+              onPress={() => setSearchQuery('')}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityRole="button"
+              accessibilityLabel="Clear search"
+            >
+              <Ionicons name="close-circle" size={20} color={colors.textMuted} />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
+      {!isSearching && (
+        <>
+          <View style={styles.group}>
+            <Text style={styles.sectionTitle}>{STRINGS.search.suggestions}</Text>
+            <View style={styles.chips}>
+              {SUGGESTIONS.map((s) => (
+                <TouchableOpacity
+                  key={s}
+                  style={styles.chip}
+                  onPress={() => setSearchQuery(s)}
+                  accessibilityRole="button"
+                  accessibilityLabel={s}
+                >
+                  <Text style={styles.chipText}>{s}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.group}>
+            <Text style={styles.sectionTitle}>{STRINGS.search.browseAll}</Text>
+            <View style={styles.categoryGrid}>
+              {CATEGORIES.map((cat) => (
+                <SongCard
+                  key={cat.id}
+                  variant="genre"
+                  song={cat}
+                  onPlay={() => setSearchQuery(cat.title)}
+                />
+              ))}
+            </View>
+          </View>
+        </>
+      )}
+
+      {isSearching && artists.length > 0 && (
+        <View style={styles.listSection}>
+          <View style={styles.group}>
+            <Text style={styles.groupTitle}>{STRINGS.search.artists}</Text>
+            {artists.map((item) => (
+              <SongCard
+                key={`artist-${item.id}`}
+                variant="row"
+                song={item}
+                isPlaying={currentSong?.id === item.id && isPlaying}
+                onPlay={() => playSong(item)}
+              />
+            ))}
+          </View>
+        </View>
+      )}
+
+      {isSearching && results.length > 0 && (
+        <View style={styles.listSection}>
+          <Text style={styles.groupTitle}>{STRINGS.search.songs}</Text>
+        </View>
+      )}
+
+      {showEmpty && (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyTitle}>{STRINGS.search.noResults}</Text>
+          <Text style={styles.emptyHint}>{STRINGS.search.emptyHint}</Text>
+        </View>
+      )}
+
+      {error && (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyTitle}>{error}</Text>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={() => loadPage(searchQuery.trim(), 1, 'replace')}
+            accessibilityRole="button"
+          >
+            <Text style={styles.retryText}>{STRINGS.search.retry}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
+
+  const renderFooter = () => {
+    if (appendError) {
+      return (
+        <View style={styles.footer}>
+          <Text style={styles.moreErrorText}>{STRINGS.player.moreFailed}</Text>
+          <TouchableOpacity
+            style={styles.footerRetry}
+            onPress={() => loadPage(searchQuery.trim(), appendError.page, 'append')}
+            accessibilityRole="button"
+          >
+            <Text style={styles.footerRetryText}>{STRINGS.search.retry}</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    if (loading || loadingMore) {
+      return (
+        <View style={styles.footer}>
+          <ActivityIndicator size="small" color={colors.accent} />
+        </View>
+      );
+    }
+    if (isSearching && results.length > 0 && !hasNextPage && !error) {
+      return (
+        <View style={styles.footer}>
+          <Text style={styles.endText}>{STRINGS.search.endOfResults}</Text>
+        </View>
+      );
+    }
+    return null;
+  };
+
+  const renderItem = ({ item }) => (
+    <View style={styles.rowWrap}>
+      <SongCard
+        variant="row"
+        song={item}
+        isPlaying={currentSong?.id === item.id && isPlaying}
+        onPlay={() => playSong(item)}
+        onMenu={() => openMenu(item)}
+      />
+    </View>
+  );
 
   return (
     <View style={styles.container}>
-      <ScrollView
+      <FlatList
+        data={isSearching ? results : []}
+        keyExtractor={(item) => item.id}
+        renderItem={renderItem}
+        ListHeaderComponent={renderHeader}
+        ListFooterComponent={renderFooter}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-      >
-        <Header title={STRINGS.search.placeholder} onProfilePress={onOpenAuth} />
-
-        <View style={styles.searchWrap}>
-          <View style={styles.searchBar}>
-            <Ionicons name="search" size={18} color={colors.textMuted} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder={STRINGS.search.placeholder}
-              placeholderTextColor={colors.textMuted}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              autoCorrect={false}
-              returnKeyType="search"
-              accessibilityLabel="Search"
-            />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity
-                onPress={() => setSearchQuery('')}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                accessibilityRole="button"
-                accessibilityLabel="Clear search"
-              >
-                <Ionicons name="close-circle" size={20} color={colors.textMuted} />
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-
-        {searchQuery.trim().length > 0 ? (
-          <View style={styles.listSection}>
-            {filteredSongs.length > 0 ? (
-              <>
-                {topArtists.length > 0 && (
-                  <View style={styles.group}>
-                    <Text style={styles.groupTitle}>{STRINGS.search.artists}</Text>
-                    {topArtists.map(item => (
-                      <SongCard
-                        key={`artist-${item.id}`}
-                        variant="row"
-                        song={item}
-                        isPlaying={currentSong?.id === item.id && isPlaying}
-                        onPlay={() => playSong(item)}
-                      />
-                    ))}
-                  </View>
-                )}
-                <View style={styles.group}>
-                  <Text style={styles.groupTitle}>{STRINGS.search.songs}</Text>
-                  {filteredSongs.map(item => (
-                    <SongCard
-                      key={item.id}
-                      variant="row"
-                      song={item}
-                      isPlaying={currentSong?.id === item.id && isPlaying}
-                      onPlay={() => playSong(item)}
-                      onMenu={() => openMenu(item)}
-                    />
-                  ))}
-                </View>
-              </>
-            ) : (
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyTitle}>{STRINGS.search.noResults}</Text>
-                <Text style={styles.emptyHint}>{STRINGS.search.emptyHint}</Text>
-              </View>
-            )}
-          </View>
-        ) : (
-          <>
-            <View style={styles.group}>
-              <Text style={styles.sectionTitle}>{STRINGS.search.suggestions}</Text>
-              <View style={styles.chips}>
-                {SUGGESTIONS.map(s => (
-                  <TouchableOpacity
-                    key={s}
-                    style={styles.chip}
-                    onPress={() => setSearchQuery(s)}
-                    accessibilityRole="button"
-                    accessibilityLabel={s}
-                  >
-                    <Text style={styles.chipText}>{s}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.group}>
-              <Text style={styles.sectionTitle}>{STRINGS.search.browseAll}</Text>
-              <View style={styles.categoryGrid}>
-                {CATEGORIES.map(cat => (
-                  <SongCard
-                    key={cat.id}
-                    variant="genre"
-                    song={cat}
-                    onPlay={() => setSearchQuery(cat.title)}
-                  />
-                ))}
-              </View>
-            </View>
-          </>
-        )}
-      </ScrollView>
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.5}
+        onRefresh={handleRefresh}
+        refreshing={refreshing}
+        removeClippedSubviews={false}
+        keyboardDismissMode="none"
+      />
     </View>
   );
 };
@@ -161,6 +377,9 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingBottom: 150,
+  },
+  headerContent: {
+    width: '100%',
   },
   searchWrap: {
     paddingHorizontal: spacing.lg,
@@ -232,9 +451,43 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.sub,
     fontFamily: typography.fontFamily.medium,
   },
+  rowWrap: {
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.xs,
+  },
+  footer: {
+    alignItems: 'center',
+    paddingVertical: spacing.xl,
+  },
+  endText: {
+    color: colors.textMuted,
+    fontSize: typography.sizes.micro,
+    fontFamily: typography.fontFamily.body,
+    letterSpacing: typography.letterSpacing.caps,
+    textTransform: 'uppercase',
+  },
+  moreErrorText: {
+    color: colors.textMuted,
+    fontSize: typography.sizes.sub,
+    fontFamily: typography.fontFamily.body,
+    marginBottom: spacing.md,
+  },
+  footerRetry: {
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.accent,
+  },
+  footerRetryText: {
+    color: colors.accent,
+    fontSize: typography.sizes.sub,
+    fontFamily: typography.fontFamily.semibold,
+  },
   emptyState: {
     alignItems: 'center',
     paddingTop: 60,
+    paddingHorizontal: spacing.lg,
   },
   emptyTitle: {
     color: colors.textPrimary,
@@ -247,6 +500,18 @@ const styles = StyleSheet.create({
     fontFamily: typography.fontFamily.body,
     textAlign: 'center',
     marginTop: spacing.sm,
+  },
+  retryButton: {
+    marginTop: spacing.lg,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    borderRadius: radius.pill,
+    backgroundColor: colors.accent,
+  },
+  retryText: {
+    color: colors.background,
+    fontSize: typography.sizes.sub,
+    fontFamily: typography.fontFamily.semibold,
   },
 });
 

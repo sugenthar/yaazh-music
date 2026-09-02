@@ -40,6 +40,8 @@ const PlayerScreen = ({ activeTab, visible = true, onClose, onOpenMenu }) => {
     seekByTap,
     toggleShuffle,
     cycleRepeat,
+    playbackError,
+    clearPlaybackError,
   } = usePlayer();
 
   const { likedSongs, toggleLike } = useLibrary();
@@ -127,6 +129,20 @@ const PlayerScreen = ({ activeTab, visible = true, onClose, onOpenMenu }) => {
             </TouchableOpacity>
           </View>
         </View>
+
+        {playbackError && (
+          <View style={styles.errorRow}>
+            <Text style={styles.errorText} numberOfLines={2}>{playbackError}</Text>
+            <TouchableOpacity
+              onPress={clearPlaybackError}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityRole="button"
+              accessibilityLabel="Dismiss error"
+            >
+              <Ionicons name="close" size={18} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+        )}
 
         <TouchableOpacity
           activeOpacity={1}
@@ -332,6 +348,25 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  errorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.backgroundSecondary,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  errorText: {
+    flex: 1,
+    color: colors.textSecondary,
+    fontSize: typography.sizes.caption,
+    fontFamily: typography.fontFamily.body,
+    marginRight: spacing.sm,
   },
   progressContainer: {
     marginBottom: spacing.xl,

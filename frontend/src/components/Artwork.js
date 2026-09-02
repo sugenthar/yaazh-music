@@ -76,14 +76,23 @@ const Artwork = ({
       )}
 
       <View style={[shapeStyle, styles.imageWrap]}>
-        <Image source={{ uri }} style={styles.image} />
-        {overlay && (
-          <LinearGradient
-            colors={['rgba(17,17,15,0)', 'rgba(17,17,15,0.28)']}
-            style={StyleSheet.absoluteFill}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-          />
+        {uri ? (
+          <>
+            <Image source={{ uri }} style={styles.image} />
+            {overlay && (
+              <LinearGradient
+                colors={['rgba(17,17,15,0)', 'rgba(17,17,15,0.28)']}
+                style={StyleSheet.absoluteFill}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+              />
+            )}
+          </>
+        ) : (
+          <View style={styles.placeholder}>
+            <View style={[styles.placeholderDisc, { width: size * 0.55 }]} />
+            <View style={[styles.placeholderCenter, { width: size * 0.2 }]} />
+          </View>
         )}
       </View>
 
@@ -104,6 +113,26 @@ const styles = StyleSheet.create({
   image: {
     width: '100%',
     height: '100%',
+  },
+  placeholder: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.card,
+  },
+  placeholderDisc: {
+    aspectRatio: 1,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.elevated,
+  },
+  placeholderCenter: {
+    position: 'absolute',
+    aspectRatio: 1,
+    borderRadius: 999,
+    backgroundColor: colors.accent,
+    opacity: 0.4,
   },
   contourRing: {
     position: 'absolute',

@@ -13,39 +13,6 @@ export interface PublicUser {
   createdAt: string;
 }
 
-export interface Song {
-  id: number;
-  external_id: string | null;
-  title: string;
-  artist: string;
-  artwork: string | null;
-  url: string;
-  duration: number | null;
-  source: string;
-}
-
-export interface GitHubSong {
-  id: string | number;
-  title: string;
-  artist: string;
-  artwork?: string;
-  url: string;
-  duration?: number;
-}
-
-export interface Artist {
-  id: number;
-  name: string;
-  external_id?: string | null;
-}
-
-export interface Album {
-  id: number;
-  title: string;
-  artist_id: number | null;
-  artwork?: string | null;
-}
-
 export interface Playlist {
   id: number;
   name: string;
@@ -56,21 +23,24 @@ export interface Playlist {
 
 export interface PlaylistSong {
   playlist_id: number;
-  song_id: number;
+  song_id: string;
+  song_json: string | null;
   added_at: string;
 }
 
 export interface Like {
   id: number;
   user_id: number;
-  song_id: number;
+  song_id: string;
+  song_json: string | null;
   created_at: string;
 }
 
 export interface HistoryEntry {
   id: number;
   user_id: number;
-  song_id: number;
+  song_id: string;
+  song_json: string | null;
   played_at: string;
 }
 

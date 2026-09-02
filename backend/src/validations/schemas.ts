@@ -25,8 +25,12 @@ export const idParamSchema = z.object({
   id: z.coerce.number().int().positive("Invalid id"),
 });
 
+export const songSourceIdParamSchema = z.object({
+  id: z.string().min(1, "Invalid song id"),
+});
+
 export const songIdParamSchema = z.object({
-  songId: z.coerce.number().int().positive("Invalid song id"),
+  songId: z.string().min(1, "Invalid song id"),
 });
 
 export const playlistNameSchema = z.object({
@@ -44,15 +48,23 @@ export const playlistUpdateSchema = z.object({
 });
 
 export const addPlaylistSongSchema = z.object({
-  songId: z.coerce.number().int().positive("Invalid song id"),
+  songId: z.string().min(1, "Invalid song id"),
+  song: z.any().optional(),
 });
 
 export const songIdBodySchema = z.object({
-  songId: z.coerce.number().int().positive("Invalid song id"),
+  songId: z.string().min(1, "Invalid song id"),
+  song: z.any().optional(),
 });
 
 export const searchQuerySchema = z.object({
   q: z.string().min(1, "Search query is required").max(200),
+});
+
+export const musicSearchSchema = z.object({
+  q: z.string().min(1, "Search query is required").max(100, "Search query is too long"),
+  page: z.coerce.number().int().positive("Invalid page").optional(),
+  limit: z.coerce.number().int().positive("Invalid limit").optional(),
 });
 
 export const moodCreateSchema = z.object({

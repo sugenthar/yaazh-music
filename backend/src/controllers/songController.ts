@@ -1,23 +1,27 @@
 import { Request, Response } from "express";
-import {
-  ensureSongsLoaded,
-  getSongById,
-  searchSongs,
-} from "../services/songService";
 import { asyncHandler, AppError, ok } from "../utils/helpers";
+import {
+  searchMusic,
+  getDefaultFeed,
+  getSongBySourceId,
+  enforcePage,
+  enforceLimit,
+} from "../modules/music/music.service";
 
-export const getAllSongs = asyncHandler(async (_req: Request, res: Response) => {
-  const songs = await ensureSongsLoaded();
-  ok(res, { songs });
+export const getAllSongs = asyncHandler(async (req: Request, res: Response) => {
+  const page = enforcePage(req.query.page);
+  const limit = enforceLimit(req.query.limit);
+  const result = await getDefaultFeed(page, limit);
+  ok(res, {
+    songs: result.songs,
+    page: result.page,
+    limit: result.limit,
+    hasNextPage: result.hasNextPage,
+  });
 });
 
 export const getSong = asyncHandler(async (req: Request, res: Response) => {
-  const id = Number(req.params.id);
-  await ensureSongsLoaded();
-  const song = getSongById(id);
-  if (!song) {
-    throw new AppError("Song not found", 404, "SONG_NOT_FOUND");
-  }
+  const song = await getSongBySourceId(req.params.id);
   ok(res, { song });
 });
 
@@ -26,7 +30,15 @@ export const searchAll = asyncHandler(async (req: Request, res: Response) => {
   if (!q.trim()) {
     throw new AppError("Search query is required", 400, "INVALID_REQUEST");
   }
-  await ensureSongsLoaded();
-  const songs = searchSongs(q.trim());
-  ok(res, { songs, query: q, count: songs.length });
+  const page = enforcePage(req.query.page);
+  const limit = enforceLimit(req.query.limit);
+  const result = await searchMusic(q.trim(), page, limit);
+  ok(res, {
+    songs: result.songs,
+    query: q,
+    count: result.songs.length,
+    page: result.page,
+    limit: result.limit,
+    hasNextPage: result.hasNextPage,
+  });
 });

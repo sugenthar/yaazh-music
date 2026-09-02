@@ -14,32 +14,6 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
-CREATE TABLE IF NOT EXISTS artists (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL UNIQUE,
-  external_id TEXT UNIQUE
-);
-
-CREATE TABLE IF NOT EXISTS albums (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  title TEXT NOT NULL,
-  artist_id INTEGER REFERENCES artists(id) ON DELETE SET NULL,
-  artwork TEXT,
-  external_id TEXT UNIQUE
-);
-
-CREATE TABLE IF NOT EXISTS songs (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  external_id TEXT UNIQUE,
-  title TEXT NOT NULL,
-  artist TEXT NOT NULL,
-  artwork TEXT,
-  url TEXT NOT NULL,
-  duration INTEGER,
-  source TEXT NOT NULL DEFAULT 'github',
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
 CREATE TABLE IF NOT EXISTS playlists (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
@@ -50,7 +24,8 @@ CREATE TABLE IF NOT EXISTS playlists (
 
 CREATE TABLE IF NOT EXISTS playlist_songs (
   playlist_id INTEGER NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
-  song_id INTEGER NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
+  song_id TEXT NOT NULL,
+  song_json TEXT,
   added_at TEXT NOT NULL DEFAULT (datetime('now')),
   PRIMARY KEY (playlist_id, song_id)
 );
@@ -58,7 +33,8 @@ CREATE TABLE IF NOT EXISTS playlist_songs (
 CREATE TABLE IF NOT EXISTS likes (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  song_id INTEGER NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
+  song_id TEXT NOT NULL,
+  song_json TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE (user_id, song_id)
 );
@@ -66,7 +42,8 @@ CREATE TABLE IF NOT EXISTS likes (
 CREATE TABLE IF NOT EXISTS listening_history (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  song_id INTEGER NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
+  song_id TEXT NOT NULL,
+  song_json TEXT,
   played_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -80,14 +57,21 @@ CREATE TABLE IF NOT EXISTS moods (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
-CREATE INDEX IF NOT EXISTS idx_songs_title ON songs(title);
-CREATE INDEX IF NOT EXISTS idx_songs_artist ON songs(artist);
 CREATE INDEX IF NOT EXISTS idx_likes_user ON likes(user_id);
 CREATE INDEX IF NOT EXISTS idx_likes_song ON likes(song_id);
 CREATE INDEX IF NOT EXISTS idx_playlist_songs_playlist ON playlist_songs(playlist_id);
 CREATE INDEX IF NOT EXISTS idx_history_user ON listening_history(user_id);
 CREATE INDEX IF NOT EXISTS idx_playlists_user ON playlists(user_id);
 CREATE INDEX IF NOT EXISTS idx_moods_user ON moods(user_id);
+`;
+
+const MIGRATE_CATALOG_REMOVAL = `
+DROP TABLE IF EXISTS listening_history;
+DROP TABLE IF EXISTS likes;
+DROP TABLE IF EXISTS playlist_songs;
+DROP TABLE IF EXISTS songs;
+DROP TABLE IF EXISTS albums;
+DROP TABLE IF EXISTS artists;
 `;
 
 export const getDb = (): Database.Database => {
@@ -102,6 +86,15 @@ export const getDb = (): Database.Database => {
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
   db.exec(SCHEMA);
+
+  const version: number = (db.pragma("user_version", { simple: true }) as number) || 0;
+  if (version < 2) {
+    db.pragma("foreign_keys = OFF");
+    db.exec(MIGRATE_CATALOG_REMOVAL);
+    db.exec(SCHEMA);
+    db.pragma("foreign_keys = ON");
+    db.pragma("user_version = 2");
+  }
 
   return db;
 };

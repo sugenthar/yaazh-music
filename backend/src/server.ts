@@ -3,13 +3,15 @@ import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import env from "./config/env";
-import { initDb } from "./config/database";
+import { initDb, closeDb } from "./config/database";
 import routes from "./routes";
 import { getLibrary } from "./controllers/likeController";
 import { searchAll } from "./controllers/songController";
+import musicRoutes from "./modules/music/music.routes";
 import { requireAuth } from "./middleware/auth";
 import { validateQuery } from "./middleware/validate";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
+import { requestId as requestIdMiddleware } from "./middleware/requestId";
 import { ok } from "./utils/helpers";
 import { searchQuerySchema } from "./validations/schemas";
 
@@ -19,6 +21,7 @@ const createApp = (): Express => {
   initDb();
 
   app.use(helmet());
+  app.use(requestIdMiddleware);
   app.use(
     cors({
       origin: env.corsOrigin === "*" ? true : env.corsOrigin.split(","),
@@ -52,6 +55,9 @@ const createApp = (): Express => {
   // Dedicated search endpoint: GET /api/search?q=...
   app.get("/api/search", validateQuery(searchQuerySchema), searchAll);
 
+  // Music catalog (Audius-backed): GET /api/music/search?q=&page=&limit=
+  app.use("/api/music", musicRoutes);
+
   // Library endpoint: GET /api/library
   app.get("/api/library", requireAuth, getLibrary);
 
@@ -65,9 +71,21 @@ const createApp = (): Express => {
 
 const startServer = () => {
   const app = createApp();
-  app.listen(env.port, () => {
+  const server = app.listen(env.port, () => {
     console.log(`Yaazh Music API v1.2 listening on http://localhost:${env.port}`);
   });
+
+  const shutdown = (signal: string) => {
+    console.log(`${signal} received, shutting down...`);
+    server.close(() => {
+      closeDb();
+      process.exit(0);
+    });
+    setTimeout(() => process.exit(1), 10_000).unref();
+  };
+
+  process.on("SIGINT", () => shutdown("SIGINT"));
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
 };
 
 if (require.main === module) {

@@ -46,7 +46,11 @@ export const errorHandler = (
     });
   }
 
-  console.error("Unhandled error:", err);
+  console.error("Unhandled error:", {
+    requestId: (req as Request & { id?: string })?.id,
+    error: err instanceof Error ? err.message : String(err),
+    stack: err instanceof Error ? err.stack : undefined,
+  });
   const message =
     process.env.NODE_ENV === "production"
       ? "Internal server error"

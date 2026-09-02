@@ -1,35 +1,106 @@
-import { beforeAll, afterAll, describe, it, expect } from "vitest";
+import { beforeAll, afterAll, describe, it, expect, vi } from "vitest";
 import request from "supertest";
 import fs from "fs";
 import os from "os";
 import path from "path";
 import type { Express } from "express";
 
+const { MOCK_RAW_SONGS } = vi.hoisted(() => {
+  const mkTrack = (
+    id: string,
+    title: string,
+    artist: string,
+    album: string,
+    duration: number
+  ) => ({
+    id,
+    title,
+    user: { name: artist },
+    album_backlink: { playlist_name: album },
+    artwork: {
+      "150x150": `https://img.example.com/${id}-150.jpg`,
+      "480x480": `https://img.example.com/${id}-480.jpg`,
+      "1000x1000": `https://img.example.com/${id}-1000.jpg`,
+    },
+    duration: String(duration),
+    release_date: "2023-05-12T00:00:00Z",
+    is_streamable: true,
+  });
+  const MOCK_RAW_SONGS = [
+    mkTrack("s1", "Hukum", "Anirudh Ravichander", "Jailer", 220),
+    mkTrack("s2", "Badass - Leo", "Anirudh Ravichander", "Leo", 210),
+    mkTrack("s3", "Mallipoo", "A.R. Rahman", "Jodi", 200),
+  ];
+  return { MOCK_RAW_SONGS: MOCK_RAW_SONGS as unknown[] };
+});
+
+vi.mock("../src/modules/music/providers/audius.provider", () => {
+  const map = (raw: Record<string, unknown>) => {
+    const r = raw as Record<string, any>;
+    const id = String(r.id);
+    return {
+      id: `audius-${id}`,
+      sourceId: id,
+      title: String(r.title),
+      artist: String(r.user?.name ?? ""),
+      artists: r.user?.name ? [String(r.user.name)] : [],
+      album: String(r.album_backlink?.playlist_name ?? ""),
+      artworkUrl: String(r.artwork?.["1000x1000"] ?? ""),
+      audioUrl: `https://mock-audius.example/v1/tracks/${id}/stream`,
+      duration: Number(r.duration) || 0,
+      language: "tamil",
+      year: 2023,
+      source: "audius",
+    };
+  };
+
+  const matches = (raw: Record<string, any>, query: string) => {
+    const q = query.toLowerCase();
+    return (
+      String(raw.title).toLowerCase().includes(q) ||
+      String(raw.user?.name ?? "").toLowerCase().includes(q)
+    );
+  };
+
+  return {
+    audiusProvider: {
+      search: vi.fn(async (query: string, page: number, limit: number) => {
+        const all = (MOCK_RAW_SONGS as Record<string, any>[]).filter(
+          (s) => !query || query.toLowerCase() === "tamil" || matches(s, query)
+        );
+        const start = (page - 1) * limit;
+        const slice = all.slice(start, start + limit);
+        return {
+          songs: slice.map(map),
+          hasNextPage: start + slice.length < all.length,
+        };
+      }),
+      getById: vi.fn(async (songId: string) => {
+        const raw = (MOCK_RAW_SONGS as Record<string, any>[]).find(
+          (s) => `audius-${s.id}` === songId || s.id === songId
+        );
+        return raw ? map(raw) : null;
+      }),
+      health: vi.fn(async () => ({ status: "available", latencyMs: 10 })),
+    },
+  };
+});
+
 let app: Express;
 let dbPath: string;
-let songId: number;
 let token: string;
+
+const SONG_1 = "audius-s1";
 
 beforeAll(async () => {
   dbPath = path.join(os.tmpdir(), `yaazh-test-${Date.now()}.db`);
   process.env.DB_PATH = dbPath;
   process.env.JWT_SECRET = "test-secret";
   process.env.NODE_ENV = "test";
+  process.env.AUDIUS_API_BASE_URL = "https://mock-audius.example";
 
   const { createApp } = await import("../src/server");
-  const { getDb } = await import("../src/config/database");
   app = createApp();
-
-  // Seed songs directly (avoid network dependency on GitHub)
-  const db = getDb();
-  const insert = db.prepare(
-    `INSERT INTO songs (external_id, title, artist, artwork, url, duration, source)
-     VALUES (?, ?, ?, ?, ?, ?, 'test')`
-  );
-  const r1 = insert.run("seed-1", "Hukum", "Anirudh Ravichander", null, "https://example.com/hukum.mp3", 220);
-  insert.run("seed-2", "Badass - Leo", "Anirudh Ravichander", null, "https://example.com/badass.mp3", 210);
-  insert.run("seed-3", "Mallipoo", "A.R. Rahman", null, "https://example.com/mallipoo.mp3", 200);
-  songId = Number(r1.lastInsertRowid);
 });
 
 afterAll(() => {
@@ -53,32 +124,155 @@ describe("Health endpoint", () => {
   });
 });
 
-describe("Songs API", () => {
-  it("GET /api/songs returns the catalog", async () => {
-    const res = await request(app).get("/api/songs").expect(200);
+describe("Music search API", () => {
+  it("returns songs from the Audius provider", async () => {
+    const res = await request(app).get("/api/music/search?q=hukum").expect(200);
     expect(res.body.success).toBe(true);
-    expect(res.body.data.songs.length).toBeGreaterThanOrEqual(3);
+    expect(res.body.data.songs.length).toBe(1);
+    expect(res.body.data.songs[0].title).toBe("Hukum");
+    expect(res.body.data.songs[0].source).toBe("audius");
+    expect(res.body.data.songs[0].sourceId).toBe("s1");
   });
 
-  it("GET /api/songs/:id returns a song", async () => {
-    const res = await request(app).get(`/api/songs/${songId}`).expect(200);
+  it("returns canonical song fields", async () => {
+    const res = await request(app).get("/api/music/search?q=hukum").expect(200);
+    const song = res.body.data.songs[0];
+    expect(song.id).toBe("audius-s1");
+    expect(song.artworkUrl).toBe("https://img.example.com/s1-1000.jpg");
+    expect(song.audioUrl).toBe("https://mock-audius.example/v1/tracks/s1/stream");
+    expect(song.duration).toBe(220);
+  });
+
+  it("paginates search results", async () => {
+    const res = await request(app)
+      .get("/api/music/search?q=tamil&page=2&limit=2")
+      .expect(200);
+    expect(res.body.data.page).toBe(2);
+    expect(res.body.data.limit).toBe(2);
+    expect(res.body.data.songs.length).toBe(1);
+    expect(res.body.data.pagination.page).toBe(2);
+    expect(res.body.data.pagination.limit).toBe(2);
+    expect(res.body.data.pagination.hasNextPage).toBe(false);
+  });
+
+  it("has next page when more results remain", async () => {
+    const res = await request(app)
+      .get("/api/music/search?q=tamil&page=1&limit=2")
+      .expect(200);
+    expect(res.body.data.pagination.hasNextPage).toBe(true);
+  });
+
+  it("defaults to page 1 and limit 20", async () => {
+    const res = await request(app).get("/api/music/search?q=hukum").expect(200);
+    expect(res.body.data.page).toBe(1);
+    expect(res.body.data.limit).toBe(20);
+  });
+
+  it("rejects a missing query", async () => {
+    const res = await request(app).get("/api/music/search").expect(400);
+    expect(res.body.error.code).toBe("INVALID_REQUEST");
+  });
+
+  it("rejects a whitespace-only query", async () => {
+    const res = await request(app).get("/api/music/search?q=%20%20%20").expect(400);
+    expect(res.body.error.code).toBe("INVALID_REQUEST");
+  });
+
+  it("rejects a query longer than 100 characters", async () => {
+    const res = await request(app)
+      .get(`/api/music/search?q=${"a".repeat(101)}`)
+      .expect(400);
+    expect(res.body.error.code).toBe("INVALID_REQUEST");
+  });
+
+  it("clamps limit above 20", async () => {
+    const res = await request(app)
+      .get("/api/music/search?q=tamil&limit=999")
+      .expect(200);
+    expect(res.body.data.limit).toBe(20);
+  });
+
+  it("rejects an invalid page value", async () => {
+    const res = await request(app)
+      .get("/api/music/search?q=tamil&page=-1")
+      .expect(400);
+    expect(res.body.error.code).toBe("INVALID_REQUEST");
+  });
+
+  it("returns MUSIC_PROVIDER_UNAVAILABLE when the provider fails", async () => {
+    const { audiusProvider } = await import(
+      "../src/modules/music/providers/audius.provider"
+    );
+    (audiusProvider.search as unknown as {
+      mockRejectedValueOnce: (value: unknown) => void;
+    }).mockRejectedValueOnce(new Error("provider exploded"));
+    const res = await request(app).get("/api/music/search?q=hukum").expect(503);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error.code).toBe("MUSIC_PROVIDER_UNAVAILABLE");
+    expect(res.body.error.message).toBe("Music service is temporarily unavailable.");
+  });
+});
+
+describe("Music health API", () => {
+  it("reports the provider status", async () => {
+    const res = await request(app).get("/api/music/health").expect(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.provider.name).toBe("audius");
+    expect(res.body.data.provider.status).toBe("available");
+  });
+
+  it("reports unavailable when the provider is down", async () => {
+    const { audiusProvider } = await import(
+      "../src/modules/music/providers/audius.provider"
+    );
+    (audiusProvider.health as unknown as {
+      mockRejectedValueOnce: (value: unknown) => void;
+    }).mockRejectedValueOnce({ status: "unavailable", latencyMs: 5 });
+    const res = await request(app).get("/api/music/health").expect(200);
+    expect(res.body.data.provider.status).toBe("unavailable");
+  });
+});
+
+describe("Music service limits", () => {
+  it("clamps limit to a maximum of 20", async () => {
+    const { enforceLimit, enforcePage, MAX_LIMIT, DEFAULT_LIMIT } = await import(
+      "../src/modules/music/music.service"
+    );
+    expect(MAX_LIMIT).toBe(20);
+    expect(DEFAULT_LIMIT).toBe(20);
+    expect(enforceLimit(100)).toBe(20);
+    expect(enforceLimit(20)).toBe(20);
+    expect(enforceLimit(5)).toBe(5);
+    expect(enforceLimit(0)).toBe(20);
+    expect(enforceLimit(-3)).toBe(20);
+    expect(enforcePage(2)).toBe(2);
+    expect(enforcePage(0)).toBe(1);
+    expect(enforcePage(-1)).toBe(1);
+  });
+});
+
+describe("Songs API", () => {
+  it("GET /api/songs returns a default feed", async () => {
+    const res = await request(app).get("/api/songs").expect(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.songs.length).toBe(3);
+    expect(res.body.data.limit).toBe(20);
+  });
+
+  it("GET /api/songs/:id returns a song by source id", async () => {
+    const res = await request(app).get("/api/songs/audius-s1").expect(200);
     expect(res.body.data.song.title).toBe("Hukum");
   });
 
   it("GET /api/songs/:id returns 404 for unknown songs", async () => {
-    const res = await request(app).get("/api/songs/99999").expect(404);
+    const res = await request(app).get("/api/songs/unknown-id").expect(404);
     expect(res.body.success).toBe(false);
     expect(res.body.error.code).toBe("SONG_NOT_FOUND");
   });
-
-  it("GET /api/songs/abc rejects invalid id", async () => {
-    const res = await request(app).get("/api/songs/abc").expect(400);
-    expect(res.body.error.code).toBe("INVALID_REQUEST");
-  });
 });
 
-describe("Search API", () => {
-  it("GET /api/search?q= hukum - case insensitive", async () => {
+describe("Search API (legacy)", () => {
+  it("GET /api/search?q=hukum returns matching songs", async () => {
     const res = await request(app).get("/api/search?q=HuKuM").expect(200);
     expect(res.body.success).toBe(true);
     expect(res.body.data.songs.length).toBe(1);
@@ -173,13 +367,13 @@ describe("Authentication", () => {
 
 describe("Likes & Library", () => {
   it("requires auth to like", async () => {
-    const res = await request(app).post(`/api/likes/${songId}`).expect(401);
+    const res = await request(app).post(`/api/likes/${SONG_1}`).expect(401);
     expect(res.body.error.code).toBe("UNAUTHORIZED");
   });
 
   it("likes a song", async () => {
     const res = await request(app)
-      .post(`/api/likes/${songId}`)
+      .post(`/api/likes/${SONG_1}`)
       .set("Authorization", `Bearer ${token}`)
       .expect(201);
     expect(res.body.data.liked).toBe(true);
@@ -187,7 +381,7 @@ describe("Likes & Library", () => {
 
   it("does not duplicate a like", async () => {
     const res = await request(app)
-      .post(`/api/likes/${songId}`)
+      .post(`/api/likes/${SONG_1}`)
       .set("Authorization", `Bearer ${token}`)
       .expect(200);
     expect(res.body.data.liked).toBe(true);
@@ -198,12 +392,14 @@ describe("Likes & Library", () => {
       .get("/api/library")
       .set("Authorization", `Bearer ${token}`)
       .expect(200);
-    expect(res.body.data.likedSongs.some((s: { id: number }) => s.id === songId)).toBe(true);
+    expect(
+      res.body.data.likedSongs.some((s: { id: string }) => s.id === SONG_1)
+    ).toBe(true);
   });
 
   it("returns 404 when liking a non-existent song", async () => {
     const res = await request(app)
-      .post("/api/likes/99999")
+      .post("/api/likes/does-not-exist")
       .set("Authorization", `Bearer ${token}`)
       .expect(404);
     expect(res.body.error.code).toBe("SONG_NOT_FOUND");
@@ -211,7 +407,7 @@ describe("Likes & Library", () => {
 
   it("unlikes a song", async () => {
     const res = await request(app)
-      .delete(`/api/likes/${songId}`)
+      .delete(`/api/likes/${SONG_1}`)
       .set("Authorization", `Bearer ${token}`)
       .expect(200);
     expect(res.body.data.liked).toBe(false);
@@ -254,7 +450,7 @@ describe("Playlists", () => {
     const res = await request(app)
       .post(`/api/playlists/${row.id}/songs`)
       .set("Authorization", `Bearer ${token}`)
-      .send({ songId })
+      .send({ songId: SONG_1 })
       .expect(201);
     expect(res.body.data.added).toBe(true);
   });
@@ -269,6 +465,7 @@ describe("Playlists", () => {
       .set("Authorization", `Bearer ${token}`)
       .expect(200);
     expect(res.body.data.playlist.songCount).toBe(1);
+    expect(res.body.data.playlist.songs[0].id).toBe(SONG_1);
   });
 
   it("renames a playlist", async () => {
@@ -290,7 +487,7 @@ describe("Playlists", () => {
       .prepare("SELECT id FROM playlists WHERE name = ?")
       .get("Gym Mix") as { id: number };
     await request(app)
-      .delete(`/api/playlists/${row.id}/songs/${songId}`)
+      .delete(`/api/playlists/${row.id}/songs/${SONG_1}`)
       .set("Authorization", `Bearer ${token}`)
       .expect(200);
     const res = await request(app)
@@ -301,7 +498,6 @@ describe("Playlists", () => {
   });
 
   it("cannot access another user's playlist (404)", async () => {
-    // Create a second user
     const reg = await request(app)
       .post("/api/auth/register")
       .send({ name: "Alex", email: "alex@yaazh.com", password: "secret123" })
@@ -337,7 +533,7 @@ describe("History", () => {
   it("requires auth", async () => {
     const res = await request(app)
       .post("/api/history")
-      .send({ songId })
+      .send({ songId: SONG_1 })
       .expect(401);
     expect(res.body.error.code).toBe("UNAUTHORIZED");
   });
@@ -346,7 +542,7 @@ describe("History", () => {
     const res = await request(app)
       .post("/api/history")
       .set("Authorization", `Bearer ${token}`)
-      .send({ songId })
+      .send({ songId: SONG_1 })
       .expect(201);
     expect(res.body.data.recorded).toBe(true);
   });
@@ -363,7 +559,7 @@ describe("History", () => {
     const res = await request(app)
       .post("/api/history")
       .set("Authorization", `Bearer ${token}`)
-      .send({ songId: 99999 })
+      .send({ songId: "does-not-exist" })
       .expect(404);
     expect(res.body.error.code).toBe("SONG_NOT_FOUND");
   });

@@ -17,6 +17,8 @@ import { LibraryProvider } from './src/store/LibraryContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import { colors } from './src/theme';
 
+console.log('[Yaazh][BOOT] App module evaluated');
+
 LogBox.ignoreLogs(['SafeAreaView has been deprecated']);
 
 export default function App() {

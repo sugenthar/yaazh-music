@@ -1,3 +1,5 @@
+import './devBootstrap';
+
 import { registerRootComponent } from 'expo';
 
 import App from './App';

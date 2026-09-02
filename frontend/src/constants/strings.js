@@ -64,6 +64,9 @@ export const STRINGS = {
     artists: 'Artists',
     albums: 'Albums',
     playlists: 'Playlists',
+    error: 'Something went wrong. Please try again.',
+    retry: 'Try again',
+    endOfResults: 'You have reached the end',
   },
   library: {
     title: 'Your Library',
@@ -105,6 +108,9 @@ export const STRINGS = {
     queue: 'Queue',
     lyricsUnavailable: "Lyrics aren't available for this track yet.",
     queueEmpty: 'The queue is empty. Play something to fill it.',
+    audioUnavailable: "Audio isn't available for this track yet.",
+    loadFailed: 'Unable to play this track right now.',
+    moreFailed: "Couldn't load more songs.",
   },
   menu: {
     play: 'Play',
@@ -131,6 +137,8 @@ export const STRINGS = {
     shortPassword: 'Password must be at least 6 characters.',
     passwordMismatch: 'Passwords do not match.',
     shortName: 'Enter your full name.',
+    musicService: 'Music service is temporarily unavailable.',
+    invalidResponse: 'Unexpected response from the server.',
   },
   loading: 'Loading...',
 };

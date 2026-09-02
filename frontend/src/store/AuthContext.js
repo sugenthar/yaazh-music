@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import AuthService from '../services/auth';
 import StorageService from '../services/storage';
 
+console.log('[Yaazh][BOOT] AuthContext module evaluated');
+
 const AuthContext = createContext(null);
 
 export const useAuth = () => {
@@ -16,6 +18,10 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  useEffect(() => {
+    console.log('[Yaazh][BOOT] AuthProvider mounted');
+  }, []);
 
   useEffect(() => {
     const restoreSession = async () => {
