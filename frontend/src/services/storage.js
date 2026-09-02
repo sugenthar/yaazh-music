@@ -2,6 +2,7 @@ const STORAGE_KEYS = {
   LIKED_SONGS: 'yaazh_liked_songs',
   PLAYLISTS: 'yaazh_playlists',
   CURRENT_SONG: 'yaazh_current_song',
+  PLAYER_STATE: 'yaazh_player_state',
   REPEAT_MODE: 'yaazh_repeat_mode',
   SHUFFLE: 'yaazh_shuffle',
   AUTH_TOKEN: 'auth_token',
@@ -85,6 +86,15 @@ class StorageService {
 
   async setCurrentSong(song) {
     await this.set(STORAGE_KEYS.CURRENT_SONG, song);
+  }
+
+  async getPlayerState() {
+    return (await this.get(STORAGE_KEYS.PLAYER_STATE)) || null;
+  }
+
+  async setPlayerState(state) {
+    if (!state) return;
+    await this.set(STORAGE_KEYS.PLAYER_STATE, state);
   }
 
   async getRepeatMode() {

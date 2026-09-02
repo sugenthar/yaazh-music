@@ -191,39 +191,6 @@ const SearchScreen = ({ openMenu, onOpenAuth }) => {
 
   const renderHeader = () => (
     <View style={styles.headerContent}>
-      <Header title={STRINGS.search.placeholder} onProfilePress={onOpenAuth} />
-
-      <View style={styles.searchWrap}>
-        <View style={styles.searchBar}>
-          <Ionicons name="search" size={18} color={colors.textMuted} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder={STRINGS.search.placeholder}
-            placeholderTextColor={colors.textMuted}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            autoCorrect={false}
-            autoCapitalize="none"
-            returnKeyType="search"
-            accessibilityLabel="Search"
-            onSubmitEditing={() => {
-              const q = searchQuery.trim();
-              if (q) loadPage(q, 1, 'replace');
-            }}
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity
-              onPress={() => setSearchQuery('')}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              accessibilityRole="button"
-              accessibilityLabel="Clear search"
-            >
-              <Ionicons name="close-circle" size={20} color={colors.textMuted} />
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
-
       {!isSearching && (
         <>
           <View style={styles.group}>
@@ -350,6 +317,39 @@ const SearchScreen = ({ openMenu, onOpenAuth }) => {
 
   return (
     <View style={styles.container}>
+      <Header title={STRINGS.search.placeholder} onProfilePress={onOpenAuth} />
+
+      <View style={styles.searchWrap}>
+        <View style={styles.searchBar}>
+          <Ionicons name="search" size={18} color={colors.textMuted} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder={STRINGS.search.placeholder}
+            placeholderTextColor={colors.textMuted}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            autoCorrect={false}
+            autoCapitalize="none"
+            returnKeyType="search"
+            accessibilityLabel="Search"
+            onSubmitEditing={() => {
+              const q = searchQuery.trim();
+              if (q) loadPage(q, 1, 'replace');
+            }}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity
+              onPress={() => setSearchQuery('')}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityRole="button"
+              accessibilityLabel="Clear search"
+            >
+              <Ionicons name="close-circle" size={20} color={colors.textMuted} />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
       <FlatList
         data={isSearching ? results : []}
         keyExtractor={(item) => item.id}

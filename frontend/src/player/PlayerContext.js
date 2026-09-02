@@ -1,12 +1,20 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
+import { AppState } from 'react-native';
+import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import QueueManager from './QueueManager';
 import StorageService from '../services/storage';
 import SongsService from '../services/songs';
 import { useAuth } from '../store/AuthContext';
 import { STRINGS } from '../constants/strings';
 
-console.log('[Yaazh][BOOT] PlayerContext module evaluated');
+const IS_DEV = typeof __DEV__ !== 'undefined' && __DEV__;
+const logPlayer = (label, ...args) => {
+  if (IS_DEV) {
+    console.log(`[Yaazh][Player] ${label}`, ...args);
+  }
+};
+
+logPlayer('module evaluated');
 
 const PlayerContext = createContext(null);
 
@@ -18,6 +26,17 @@ export const usePlayer = () => {
   return context;
 };
 
+const SAVE_INTERVAL_MS = 5000;
+
+const toMetadata = (song) =>
+  song
+    ? {
+        title: song.title,
+        artist: song.artist,
+        artwork: song.artwork,
+      }
+    : undefined;
+
 export const PlayerProvider = ({ children }) => {
   const [currentSong, setCurrentSong] = useState(null);
   const [songs, setSongs] = useState([]);
@@ -28,14 +47,14 @@ export const PlayerProvider = ({ children }) => {
   const renderLoggedRef = useRef(false);
   if (!renderLoggedRef.current) {
     renderLoggedRef.current = true;
-    console.log('[Yaazh][BOOT] PlayerProvider first render');
+    logPlayer('provider first render');
   }
 
   const hasAudio = (song) => Boolean(song && typeof song.url === 'string' && song.url.length > 0);
 
   const queueManagerRef = useRef(new QueueManager([]));
-  const playerReplacement = useAudioPlayer();
-  const player = playerReplacement;
+  // Single logical player owned here; no screen ever creates its own player.
+  const player = useAudioPlayer();
   const status = useAudioPlayerStatus(player);
   const { isAuthenticated } = useAuth();
 
@@ -44,6 +63,145 @@ export const PlayerProvider = ({ children }) => {
   // the user rapidly switches songs and against auto-play on mount.
   const loadGenerationRef = useRef(0);
   const pendingPlayRef = useRef(null);
+  // Silent (no autoplay) restore bookkeeping: { songId, positionSec, generation }.
+  const restoreRef = useRef(null);
+
+  useEffect(() => {
+    logPlayer('create');
+    // Required for real Android background playback: keeps the audio session
+    // active (foreground media service) so audio survives Home/lock/app switch.
+    setAudioModeAsync({
+      playsInSilentMode: true,
+      shouldPlayInBackground: true,
+      interruptionMode: 'doNotMix',
+      allowsRecording: false,
+      shouldRouteThroughEarpiece: false,
+    })
+      .then(() => logPlayer('audioMode', 'shouldPlayInBackground=true'))
+      .catch((e) => logPlayer('audioMode failed', e));
+  }, []);
+
+  // Lifecycle tracking ONLY for dev logging. Deliberately no pause()/play() —
+  // the audio engine keeps the source of truth while backgrounded.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (nextState) => {
+      logPlayer('appstate', nextState);
+    });
+    return () => sub.remove();
+  }, []);
+
+  const isPlaying = Boolean(status?.playing ?? status?.isPlaying ?? false);
+  const positionMs = ((status?.currentTime ?? 0) * 1000);
+  const durationMs = ((status?.duration ?? 0) * 1000);
+  const progress = status?.duration > 0 ? (status?.currentTime ?? 0) / status?.duration : 0;
+
+  const seekToSeconds = useCallback(
+    (seconds) => {
+      try {
+        const result = player.seekTo(seconds);
+        if (result && typeof result.then === 'function') {
+          result.catch(() => {});
+        }
+      } catch {
+        /* ignore seek errors until the source is loaded */
+      }
+    },
+    [player]
+  );
+
+  // --- persistence -------------------------------------------------------
+  const saveStateRef = useRef(null);
+  const persistPlayerState = () => {
+    if (!currentSong) return;
+    // Skip writes while a silent restore is still loading, so the saved
+    // position is not clobbered by the preload's position 0.
+    if (restoreRef.current) return;
+    const snapshot = {
+      song: currentSong,
+      positionSec: Math.round(status?.currentTime ?? 0),
+      isPlaying,
+    };
+    logPlayer('position save', snapshot.positionSec, 'isPlaying', isPlaying);
+    StorageService.setPlayerState(snapshot).catch(() => {});
+  };
+  useEffect(() => {
+    saveStateRef.current = persistPlayerState;
+  });
+
+  useEffect(() => {
+    if (currentSong && !restoreRef.current) {
+      saveStateRef.current?.();
+    }
+  }, [currentSong]);
+
+  useEffect(() => {
+    if (currentSong && !isPlaying) {
+      saveStateRef.current?.();
+    }
+  }, [isPlaying]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!currentSong) return;
+    const id = setInterval(() => saveStateRef.current?.(), SAVE_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [currentSong]);
+
+  // --- restore (never autoplay) -----------------------------------------
+  useEffect(() => {
+    logPlayer('restore begin');
+    (async () => {
+      try {
+        const saved = await StorageService.getPlayerState();
+        const storedSong = saved?.song || (await StorageService.getCurrentSong());
+        if (!storedSong || !hasAudio(storedSong)) {
+          logPlayer('restore: nothing to restore');
+          return;
+        }
+        logPlayer('restore currentSong', storedSong.id, 'saved position', saved?.positionSec, 'wasPlaying', saved?.isPlaying);
+        // currentSong restoration only. isPlaying stays false on launch:
+        // "currentSong != isPlaying" is valid. Reopening never auto-play()s.
+        setCurrentSong(storedSong);
+
+        const generation = loadGenerationRef.current + 1;
+        loadGenerationRef.current = generation;
+        restoreRef.current = {
+          songId: storedSong.id,
+          positionSec: Math.max(0, Number(saved?.positionSec) || 0),
+          generation,
+        };
+        try {
+          player.pause();
+          player.replace({
+            uri: storedSong.url,
+            metadata: toMetadata(storedSong),
+          });
+        } catch (e) {
+          logPlayer('restore preload failed', e);
+          restoreRef.current = null;
+        }
+      } catch (e) {
+        logPlayer('restore error', e);
+      }
+    })();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Silent seek after restored source finishes loading. No play() anywhere here.
+  useEffect(() => {
+    const r = restoreRef.current;
+    if (!r) return;
+    if (
+      status?.isLoaded &&
+      r.songId === currentSong?.id &&
+      r.generation === loadGenerationRef.current &&
+      !isPlaying
+    ) {
+      if (r.positionSec > 0) {
+        logPlayer('restore seek', r.positionSec);
+        seekToSeconds(r.positionSec);
+      }
+      restoreRef.current = null;
+    }
+  }, [status?.isLoaded, currentSong?.id, isPlaying, seekToSeconds]);
 
   useEffect(() => {
     queueManagerRef.current.setQueue(songs);
@@ -55,11 +213,6 @@ export const PlayerProvider = ({ children }) => {
   useEffect(() => {
     StorageService.getRepeatMode().then(setRepeatMode);
     StorageService.getShuffle().then(setIsShuffle);
-    StorageService.getCurrentSong().then(savedSong => {
-      if (savedSong) {
-        setCurrentSong(savedSong);
-      }
-    });
   }, []);
 
   useEffect(() => {
@@ -76,10 +229,31 @@ export const PlayerProvider = ({ children }) => {
     }
   }, [currentSong]);
 
-  const isPlaying = status?.playing ?? status?.isPlaying ?? false;
-  const positionMs = ((status?.currentTime ?? 0) * 1000);
-  const durationMs = ((status?.duration ?? 0) * 1000);
-  const progress = status?.duration > 0 ? (status?.currentTime ?? 0) / status?.duration : 0;
+  // Shared load path used by user actions only. Sets the pending token so the
+  // track plays exactly once when the engine reports isLoaded. A user action
+  // supersedes any silent restore pending on another track.
+  const startLoad = useCallback(
+    (song) => {
+      const generation = loadGenerationRef.current + 1;
+      loadGenerationRef.current = generation;
+      pendingPlayRef.current = { id: song.id, generation };
+      if (restoreRef.current && restoreRef.current.songId !== song.id) {
+        restoreRef.current = null;
+      }
+      try {
+        player.pause();
+        player.replace({
+          uri: song.url,
+          metadata: toMetadata(song),
+        });
+      } catch (e) {
+        logPlayer('load failed', e);
+        pendingPlayRef.current = null;
+        setPlaybackError(STRINGS.player.loadFailed);
+      }
+    },
+    [player]
+  );
 
   const playSong = useCallback(
     (song) => {
@@ -95,12 +269,18 @@ export const PlayerProvider = ({ children }) => {
         if (pendingPlayRef.current?.id === song.id) {
           return;
         }
+        if (!status?.isLoaded) {
+          startLoad(song);
+          return;
+        }
         if (isPlaying) {
+          logPlayer('pause', song.id);
           player.pause();
         } else {
           if ((status?.currentTime ?? 0) >= (status?.duration || 0)) {
-            player.seekTo(0);
+            seekToSeconds(0);
           }
+          logPlayer('play (same song)', song.id);
           player.play();
         }
         return;
@@ -109,28 +289,12 @@ export const PlayerProvider = ({ children }) => {
       setCurrentSong(song);
       setPlaybackError(null);
       if (isAuthenticated) {
-        SongsService.addToHistory(song.id);
+        SongsService.addToHistory(song.id).catch(() => {});
       }
-      const generation = loadGenerationRef.current + 1;
-      loadGenerationRef.current = generation;
-      pendingPlayRef.current = { id: song.id, generation };
-      try {
-        player.pause();
-        player.replace({
-          uri: song.url,
-          metadata: {
-            title: song.title,
-            artist: song.artist,
-            artwork: song.artwork,
-          },
-        });
-      } catch (e) {
-        console.log('Failed to start playback:', e);
-        pendingPlayRef.current = null;
-        setPlaybackError(STRINGS.player.loadFailed);
-      }
+      logPlayer('load -> play', song.id);
+      startLoad(song);
     },
-    [currentSong, isPlaying, player, status, isAuthenticated]
+    [currentSong, isPlaying, player, status?.isLoaded, status?.currentTime, status?.duration, isAuthenticated, startLoad, seekToSeconds]
   );
 
   useEffect(() => {
@@ -143,10 +307,18 @@ export const PlayerProvider = ({ children }) => {
       !isPlaying &&
       !playbackError
     ) {
+      const r = restoreRef.current;
+      if (r && r.songId === pending.id) {
+        if (r.positionSec > 0) {
+          seekToSeconds(r.positionSec);
+        }
+        restoreRef.current = null;
+      }
       pendingPlayRef.current = null;
+      logPlayer('play', pending.id);
       player.play();
     }
-  }, [status?.isLoaded, currentSong?.id, isPlaying, playbackError, player]);
+  }, [status?.isLoaded, currentSong?.id, isPlaying, playbackError, seekToSeconds, player]);
 
   const togglePlay = useCallback(() => {
     if (!currentSong) return;
@@ -156,14 +328,21 @@ export const PlayerProvider = ({ children }) => {
     }
     setPlaybackError(null);
     if (isPlaying) {
+      logPlayer('pause', currentSong.id);
       player.pause();
     } else {
-      if ((status?.currentTime ?? 0) >= (status?.duration || 0)) {
-        player.seekTo(0);
+      if (!status?.isLoaded) {
+        // Restored metadata whose source is not loaded yet -> full load path.
+        startLoad(currentSong);
+        return;
       }
+      if ((status?.currentTime ?? 0) >= (status?.duration || 0)) {
+        seekToSeconds(0);
+      }
+      logPlayer('play', currentSong.id);
       player.play();
     }
-  }, [currentSong, isPlaying, player, status]);
+  }, [currentSong, isPlaying, player, status?.isLoaded, status?.currentTime, status?.duration, startLoad, seekToSeconds]);
 
   const playNext = useCallback(() => {
     const maxTries = (songs?.length || 0) + 1;
@@ -174,15 +353,17 @@ export const PlayerProvider = ({ children }) => {
       nextSong = queueManagerRef.current.getNext({ shuffle: isShuffle, repeatMode });
     }
     if (nextSong) {
+      logPlayer('next', nextSong.id);
       playSong(nextSong);
     } else {
       player.pause();
-      player.seekTo(0);
+      seekToSeconds(0);
     }
-  }, [songs, isShuffle, repeatMode, playSong, player]);
+  }, [songs, isShuffle, repeatMode, playSong, seekToSeconds, player]);
 
   useEffect(() => {
     if (status?.didJustFinish) {
+      logPlayer('didJustFinish');
       playNext();
     }
   }, [status?.didJustFinish, playNext]);
@@ -190,15 +371,25 @@ export const PlayerProvider = ({ children }) => {
   const playPrevious = useCallback(() => {
     const prevSong = queueManagerRef.current.getPrevious();
     if (prevSong) {
+      logPlayer('previous', prevSong.id);
       playSong(prevSong);
     }
   }, [playSong]);
 
   const seekTo = useCallback(
     (time) => {
-      if (player) player.seekTo(time);
+      if (!player) return;
+      logPlayer('seek', time);
+      seekToSeconds(time);
+      if (currentSong) {
+        StorageService.setPlayerState({
+          song: currentSong,
+          positionSec: Math.max(0, Math.round(Number(time) || 0)),
+          isPlaying,
+        }).catch(() => {});
+      }
     },
-    [player]
+    [player, currentSong, isPlaying, seekToSeconds]
   );
 
   const toggleShuffle = useCallback(() => {
@@ -217,9 +408,9 @@ export const PlayerProvider = ({ children }) => {
     (tapX, barWidth) => {
       const seekProgress = tapX / barWidth;
       const seekTime = seekProgress * (status?.duration || 0);
-      if (player) player.seekTo(seekTime);
+      if (player) seekTo(seekTime);
     },
-    [player, status]
+    [player, status, seekTo]
   );
 
   const clearPlaybackError = useCallback(() => {
