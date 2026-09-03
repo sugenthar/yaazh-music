@@ -1,5 +1,6 @@
 import dotenv from "dotenv";
 import { z } from "zod";
+import { randomUUID } from "crypto";
 
 dotenv.config();
 
@@ -46,9 +47,21 @@ const envSchema = z.object({
   jwtAlgorithm: z.enum(["HS256", "HS384", "HS512"]).default("HS256"),
   historyMaxEntries: z.number().int().positive().default(500),
   trustProxy: z.boolean().default(false),
+  trustProxyHopCount: z.number().int().min(1).max(5).default(1),
   rateLimitAuthWindowMs: z.number().int().positive().default(15 * 60 * 1000),
   rateLimitSearchWindowMs: z.number().int().positive().default(15 * 60 * 1000),
   logLevel: z.enum(["debug", "info", "warn", "error"]).default("info"),
+  redisUrl: z.string().optional(),
+  redisKeyPrefix: z.string().min(1).max(64).default("yaazh"),
+  redisConnectTimeoutMs: z.number().int().positive().default(2000),
+  redisCommandTimeoutMs: z.number().int().positive().default(2000),
+  instanceId: z.string().min(1).max(128),
+  workerConcurrency: z.number().int().positive().default(4),
+  workerPollIntervalMs: z.number().int().positive().default(1000),
+  workerRetryMax: z.number().int().min(0).default(3),
+  backupDir: z.string().min(1).default("data/backups"),
+  backupRetentionDays: z.number().int().positive().default(7),
+  backupIntervalHours: z.number().int().positive().default(24),
 });
 
 const raw = {
@@ -85,9 +98,21 @@ const raw = {
   jwtAlgorithm: (process.env.JWT_ALGORITHM as "HS256" | "HS384" | "HS512") || "HS256",
   historyMaxEntries: toInt(process.env.HISTORY_MAX_ENTRIES, 500),
   trustProxy: toBool(process.env.TRUST_PROXY, false),
+  trustProxyHopCount: toInt(process.env.TRUST_PROXY_HOP_COUNT, 1),
   rateLimitAuthWindowMs: toInt(process.env.RATE_LIMIT_AUTH_WINDOW_MS, 15 * 60 * 1000),
   rateLimitSearchWindowMs: toInt(process.env.RATE_LIMIT_SEARCH_WINDOW_MS, 15 * 60 * 1000),
   logLevel: (process.env.LOG_LEVEL as "debug" | "info" | "warn" | "error") || "info",
+  redisUrl: process.env.REDIS_URL || undefined,
+  redisKeyPrefix: process.env.REDIS_KEY_PREFIX || "yaazh",
+  redisConnectTimeoutMs: toInt(process.env.REDIS_CONNECT_TIMEOUT_MS, 2000),
+  redisCommandTimeoutMs: toInt(process.env.REDIS_COMMAND_TIMEOUT_MS, 2000),
+  instanceId: process.env.INSTANCE_ID || `api-${randomUUID().split("-")[0]}`,
+  workerConcurrency: toInt(process.env.WORKER_CONCURRENCY, 4),
+  workerPollIntervalMs: toInt(process.env.WORKER_POLL_INTERVAL_MS, 1000),
+  workerRetryMax: toInt(process.env.WORKER_RETRY_MAX, 3),
+  backupDir: process.env.BACKUP_DIR || "data/backups",
+  backupRetentionDays: toInt(process.env.BACKUP_RETENTION_DAYS, 7),
+  backupIntervalHours: toInt(process.env.BACKUP_INTERVAL_HOURS, 24),
 };
 
 const parsed = envSchema.safeParse(raw);
@@ -129,9 +154,21 @@ const env = {
   jwtAlgorithm: parsed.data.jwtAlgorithm,
   historyMaxEntries: parsed.data.historyMaxEntries,
   trustProxy: parsed.data.trustProxy,
+  trustProxyHopCount: parsed.data.trustProxyHopCount,
   rateLimitAuthWindowMs: parsed.data.rateLimitAuthWindowMs,
   rateLimitSearchWindowMs: parsed.data.rateLimitSearchWindowMs,
   logLevel: parsed.data.logLevel,
+  redisUrl: parsed.data.redisUrl,
+  redisKeyPrefix: parsed.data.redisKeyPrefix,
+  redisConnectTimeoutMs: parsed.data.redisConnectTimeoutMs,
+  redisCommandTimeoutMs: parsed.data.redisCommandTimeoutMs,
+  instanceId: parsed.data.instanceId,
+  workerConcurrency: parsed.data.workerConcurrency,
+  workerPollIntervalMs: parsed.data.workerPollIntervalMs,
+  workerRetryMax: parsed.data.workerRetryMax,
+  backupDir: parsed.data.backupDir,
+  backupRetentionDays: parsed.data.backupRetentionDays,
+  backupIntervalHours: parsed.data.backupIntervalHours,
 };
 
 if (env.nodeEnv === "production" && env.jwtSecret === "dev-secret-do-not-use-in-production") {

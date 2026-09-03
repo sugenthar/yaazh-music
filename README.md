@@ -145,12 +145,18 @@ Authenticate requests with: `Authorization: Bearer <token>`
 
 ## Testing
 
-Backend API tests use `vitest` + `supertest` against an in-memory database seeded with sample songs (no network dependency):
+Backend tests use `vitest` + `supertest` (no network dependency; Redis-backed behaviour is tested via mocks, so tests run without a Redis server):
 
 ```bash
 cd backend
-npm test        # 41 tests
+npm test                 # 266 tests
+npm run typecheck        # tsc --noEmit
 ```
+
+Newer tests cover the scalability primitives: Redis cache adapter, distributed
+rate-limit store (with memory fallback), the worker manager/queue (retries,
+idempotency, dead-lettering), the repository layer, DB backup/restore, concurrent
+writes, and instance identity in metrics.
 
 ## Database
 
@@ -162,3 +168,61 @@ SQLite (WAL mode) at `backend/data/yaazh.db`, created automatically on first run
 - "Share" in the song menu is not yet wired to the device share sheet.
 - Artist/Album screens in the Library are placeholders backed by API endpoints.
 - Production API URL (`https://api.yaazh-music.com`) and app icons/splash need real assets/domain before release.
+
+## Horizontal scalability (backend)
+
+The backend is a **stateless modular monolith**: any instance can serve any request,
+and state that must be shared across the fleet lives in Redis (a distributed cache
+and distributed rate-limit counter). Redis is used only as a shared/coordination
+layer — **never as the source of truth** — and the API degrades safely to memory-only
+mode when Redis is unset or unavailable, so ordinary music browsing never depends on
+Redis.
+
+What makes this horizontal-scale-ready:
+
+- **Stateless auth** – JWT issued/verified locally on each instance; no server session store required.
+- **Distributed cache** – `RedisCacheAdapter` attached as a shared tier to the in-memory `CacheService` (write-through set, async read-through on miss). Keys are prefixed with `REDIS_KEY_PREFIX`.
+- **Distributed rate limiting** – `RedisRateLimitStore` uses a fixed-window Lua `INCR`+`EXPIRE` shared across instances, with an in-memory fallback so Redis downtime never turns into an unlimited-bypass or a crash.
+- **Background workers** – `WorkerManager` + `JobQueue`: in-process queue by default, Redis-backed distributed queue when configured, with per-job concurrency, retries, idempotency (`SET NX`), and dead-lettering.
+- **Database backup/recovery** – online SQLite `db.backup()` snapshots with integrity check, rotation, and restore, scheduled per `BACKUP_INTERVAL_HOURS`.
+- **Observability** – per-instance `instanceId` in logs and `/api/metrics`; p50/p95/p99 latency, distributed/worker/backup counters, Redis and DB latency.
+- **Health/readiness** – `/health`, `/ready` (503 + `NOT_READY` when not ready), graceful shutdown that drains HTTP → workers → providers → cache/Redis → DB.
+
+### Env vars to run scaled out
+
+```bash
+# Backend (see backend/.env.example for all variables)
+REDIS_URL=redis://:<password>@redis.example:6379
+REDIS_KEY_PREFIX=yaazh
+INSTANCE_ID=api-a           # unique per instance (auto-generated if unset)
+TRUST_PROXY=true
+TRUST_PROXY_HOP_COUNT=1
+
+WORKER_CONCURRENCY=4
+WORKER_POLL_INTERVAL_MS=1000
+WORKER_RETRY_MAX=3
+
+BACKUP_DIR=data/backups
+BACKUP_RETENTION_DAYS=7
+BACKUP_INTERVAL_HOURS=24
+```
+
+### Deploying multiple instances
+
+1. Build the image (`backend/Dockerfile`) or run `npm run build && npm start` on several nodes.
+2. Point all instances at the same `REDIS_URL` and `REDIS_KEY_PREFIX`.
+3. Put them behind the reverse proxy in `backend/deploy/nginx.conf` (`least_conn` across `:3001..:3003`), which preserves real client IPs so rate limiting works fleet-wide.
+
+**Database note:** the app currently uses per-instance SQLite (`better-sqlite3`). For a truly shared database across instances, mount `backend/data` on shared/network storage (the WAL DB is written safely) or swap `runInTransaction` for a serverless/network database — both supported by the repository layer. Instance-agnostic endpoints (`/health`, `/ready`, `/api/metrics`, JWT auth, caching, rate limiting, workers) already work identically on every replica.
+
+### Load testing
+
+```bash
+cd backend
+npm run dev                     # or npm start
+npm run loadtest                # hits http://localhost:3000/health
+# Tune it:
+BASE_URL=http://localhost:3000 CONCURRENCY=200 DURATION_MS=10000 npm run loadtest
+LOAD_RAMP=10,50,100,200,500 BASE_URL=http://localhost:3000 npm run loadtest
+```
+The harness (no external deps) ramps 10 → 500 concurrent clients and reports RPS, success rate, and p50/p95/p99/max latency per level.

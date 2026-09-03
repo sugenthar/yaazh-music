@@ -218,8 +218,11 @@ export const validateDb = (): boolean => {
 
 export const runInTransaction = <T>(fn: () => T): T => {
   const database = getDb();
+  const started = Date.now();
   const transaction = database.transaction(fn);
-  return transaction();
+  const result = transaction();
+  metrics.recordDatabaseLatency(Date.now() - started);
+  return result;
 };
 
 export const closeDb = (): void => {

@@ -1,4 +1,5 @@
 import { sanitizeLogFields } from "./helpers";
+import env from "../config/env";
 
 type LogLevel = "debug" | "info" | "warn" | "error";
 
@@ -22,6 +23,7 @@ const emit = (level: LogLevel, msg: string, fields: Record<string, unknown>) => 
     ts: new Date().toISOString(),
     level,
     msg,
+    instanceId: env.instanceId,
     ...sanitizeLogFields(fields),
   };
   const line = JSON.stringify(entry);

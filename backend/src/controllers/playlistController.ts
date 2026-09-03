@@ -1,8 +1,8 @@
 import { Request, Response } from "express";
-import { getDb, runInTransaction } from "../config/database";
 import { AuthRequest } from "../middleware/auth";
 import { resolveSongSnapshot } from "../modules/music/music.service";
 import { asyncHandler, ok, AppError } from "../utils/helpers";
+import { playlists } from "../repositories";
 
 interface PlaylistRow {
   id: number;
@@ -30,17 +30,9 @@ const parseSnapshot = (row: PlaylistSongRow) => {
   return { id: row.song_id, songId: row.song_id };
 };
 
-const toPlaylistResponse = (db: ReturnType<typeof getDb>, row: PlaylistRow) => {
-  const songRows = db
-    .prepare(
-      `SELECT song_id, song_json, added_at FROM playlist_songs
-       WHERE playlist_id = ?
-       ORDER BY added_at ASC`
-    )
-    .all(row.id) as PlaylistSongRow[];
-
+const toPlaylistResponse = (row: PlaylistRow) => {
+  const songRows = playlists.songsFor(row.id);
   const songs = songRows.map(parseSnapshot);
-
   return {
     id: row.id,
     name: row.name,
@@ -51,23 +43,14 @@ const toPlaylistResponse = (db: ReturnType<typeof getDb>, row: PlaylistRow) => {
   };
 };
 
-const getOwnedPlaylist = (userId: number, playlistId: number): PlaylistRow | null => {
-  const db = getDb();
-  return (
-    (db
-      .prepare("SELECT * FROM playlists WHERE id = ? AND user_id = ?")
-      .get(playlistId, userId) as PlaylistRow | undefined) || null
-  );
-};
+const getOwnedPlaylist = (userId: number, playlistId: number): PlaylistRow | null =>
+  playlists.findOwned(userId, playlistId);
 
 export const getPlaylists = asyncHandler(async (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
   const userId = authReq.user!.id;
-  const db = getDb();
-  const rows = db
-    .prepare("SELECT * FROM playlists WHERE user_id = ? ORDER BY created_at DESC")
-    .all(userId) as PlaylistRow[];
-  ok(res, { playlists: rows.map((r) => toPlaylistResponse(db, r)) });
+  const rows = playlists.listForUser(userId);
+  ok(res, { playlists: rows.map(toPlaylistResponse) });
 });
 
 export const getPlaylist = asyncHandler(async (req: Request, res: Response) => {
@@ -78,21 +61,15 @@ export const getPlaylist = asyncHandler(async (req: Request, res: Response) => {
   if (!row) {
     throw new AppError("Playlist not found", 404, "PLAYLIST_NOT_FOUND");
   }
-  ok(res, { playlist: toPlaylistResponse(getDb(), row) });
+  ok(res, { playlist: toPlaylistResponse(row) });
 });
 
 export const createPlaylist = asyncHandler(async (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
   const userId = authReq.user!.id;
   const { name, description } = req.body as { name: string; description?: string };
-  const db = getDb();
-  const result = db
-    .prepare("INSERT INTO playlists (name, description, user_id) VALUES (?, ?, ?)")
-    .run(name.trim(), description?.trim() || null, userId);
-  const row = db
-    .prepare("SELECT * FROM playlists WHERE id = ?")
-    .get(result.lastInsertRowid) as PlaylistRow;
-  ok(res, { playlist: toPlaylistResponse(db, row) }, 201);
+  const row = playlists.create(userId, name, description || null);
+  ok(res, { playlist: toPlaylistResponse(row) }, 201);
 });
 
 export const updatePlaylist = asyncHandler(async (req: Request, res: Response) => {
@@ -100,19 +77,20 @@ export const updatePlaylist = asyncHandler(async (req: Request, res: Response) =
   const userId = authReq.user!.id;
   const playlistId = Number(req.params.id);
   const { name, description } = req.body as { name?: string; description?: string };
-  const db = getDb();
 
   const row = getOwnedPlaylist(userId, playlistId);
   if (!row) {
     throw new AppError("Playlist not found", 404, "PLAYLIST_NOT_FOUND");
   }
 
-  db.prepare(
-    "UPDATE playlists SET name = ?, description = ? WHERE id = ?"
-  ).run(name?.trim() || row.name, description !== undefined ? (description.trim() || null) : row.description, playlistId);
+  playlists.update(
+    playlistId,
+    name?.trim() || row.name,
+    description !== undefined ? description.trim() || null : row.description
+  );
 
   const updated = getOwnedPlaylist(userId, playlistId)!;
-  ok(res, { playlist: toPlaylistResponse(db, updated) });
+  ok(res, { playlist: toPlaylistResponse(updated) });
 });
 
 export const deletePlaylist = asyncHandler(async (req: Request, res: Response) => {
@@ -125,11 +103,7 @@ export const deletePlaylist = asyncHandler(async (req: Request, res: Response) =
     throw new AppError("Playlist not found", 404, "PLAYLIST_NOT_FOUND");
   }
 
-  runInTransaction(() => {
-    const db = getDb();
-    db.prepare("DELETE FROM playlist_songs WHERE playlist_id = ?").run(playlistId);
-    db.prepare("DELETE FROM playlists WHERE id = ?").run(playlistId);
-  });
+  playlists.delete(playlistId);
   ok(res, { deleted: true, playlistId });
 });
 
@@ -145,21 +119,8 @@ export const addSongToPlaylist = asyncHandler(async (req: Request, res: Response
   }
 
   const song = await resolveSongSnapshot(songId, rawSong);
-
-  const db = getDb();
-  const existing = db
-    .prepare("SELECT 1 FROM playlist_songs WHERE playlist_id = ? AND song_id = ?")
-    .get(playlistId, songId);
-  if (existing) {
-    return ok(res, { added: true, songId });
-  }
-
-  runInTransaction(() => {
-    db.prepare(
-      "INSERT INTO playlist_songs (playlist_id, song_id, song_json) VALUES (?, ?, ?)"
-    ).run(playlistId, songId, song ? JSON.stringify(song) : null);
-  });
-  ok(res, { added: true, songId }, 201);
+  const { created } = playlists.addSong(playlistId, songId, song ? JSON.stringify(song) : null);
+  ok(res, { added: true, songId }, created ? 201 : 200);
 });
 
 export const removeSongFromPlaylist = asyncHandler(async (req: Request, res: Response) => {
@@ -173,10 +134,6 @@ export const removeSongFromPlaylist = asyncHandler(async (req: Request, res: Res
     throw new AppError("Playlist not found", 404, "PLAYLIST_NOT_FOUND");
   }
 
-  const db = getDb();
-  db.prepare("DELETE FROM playlist_songs WHERE playlist_id = ? AND song_id = ?").run(
-    playlistId,
-    songId
-  );
+  playlists.removeSong(playlistId, songId);
   ok(res, { removed: true, songId });
 });

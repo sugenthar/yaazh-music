@@ -1,6 +1,7 @@
 import env from "../config/env";
 import { logger } from "../utils/logger";
 import { metrics } from "./metrics";
+import { CacheAdapter } from "./cache/types";
 
 interface CacheEntry<T> {
   value: T;
@@ -16,6 +17,9 @@ interface CacheStats {
   evictions: number;
   errors: number;
   staleResponses: number;
+  sharedHits: number;
+  sharedMisses: number;
+  sharedErrors: number;
 }
 
 export class CacheService {
@@ -24,6 +28,7 @@ export class CacheService {
   private ttlMs: number;
   private staleTtlMs: number;
   private maxSize: number;
+  private shared: CacheAdapter | null = null;
   private stats: CacheStats = {
     hits: 0,
     misses: 0,
@@ -32,12 +37,27 @@ export class CacheService {
     evictions: 0,
     errors: 0,
     staleResponses: 0,
+    sharedHits: 0,
+    sharedMisses: 0,
+    sharedErrors: 0,
   };
 
   constructor(options?: { ttlMs?: number; staleTtlMs?: number; maxSize?: number }) {
     this.ttlMs = options?.ttlMs ?? env.cacheTtlMs;
     this.staleTtlMs = options?.staleTtlMs ?? env.cacheStaleTtlMs;
     this.maxSize = options?.maxSize ?? env.cacheMaxSize;
+  }
+
+  attachShared(adapter: CacheAdapter): void {
+    this.shared = adapter;
+  }
+
+  detachShared(): void {
+    this.shared = null;
+  }
+
+  get hasShared(): boolean {
+    return this.shared !== null;
   }
 
   get<T = unknown>(key: string): T | undefined {
@@ -83,6 +103,14 @@ export class CacheService {
       staleAt: now + this.ttlMs,
     });
     this.stats.sets++;
+    // Write-through to shared adapter (fire-and-forget)
+    if (this.shared) {
+      const sharedTtlSeconds = Math.ceil(this.ttlMs / 1000);
+      this.shared.set(key, JSON.stringify(value), sharedTtlSeconds).catch((err) => {
+        this.stats.sharedErrors++;
+        logger.debug("cache.shared.set_failed", { key, error: err instanceof Error ? err.message : "unknown" });
+      });
+    }
   }
 
   has(key: string): boolean {
@@ -100,6 +128,9 @@ export class CacheService {
     const result = this.store.delete(key);
     this.inFlight.delete(key);
     if (result) this.stats.deletes++;
+    if (this.shared) {
+      this.shared.del(key).catch(() => {});
+    }
     return result;
   }
 
@@ -114,6 +145,9 @@ export class CacheService {
       }
     }
     this.stats.deletes += count;
+    if (this.shared) {
+      this.shared.invalidate(pattern).catch(() => {});
+    }
     return count;
   }
 
@@ -125,6 +159,30 @@ export class CacheService {
     const cached = this.get<T>(key);
     if (cached !== undefined) {
       return cached;
+    }
+
+    // Check shared adapter on local miss (distributed cache read-through)
+    if (this.shared) {
+      try {
+        const sharedVal = await this.shared.get(key);
+        if (sharedVal !== null) {
+          this.stats.sharedHits++;
+          metrics.recordCacheSharedHit();
+          const parsed = JSON.parse(sharedVal) as T;
+          this.set(key, parsed);
+          if (ttlOverride) {
+            const entry = this.store.get(key);
+            if (entry) entry.staleAt = Date.now() + ttlOverride;
+          }
+          return parsed;
+        }
+        this.stats.sharedMisses++;
+        metrics.recordCacheSharedMiss();
+      } catch (err) {
+        this.stats.sharedErrors++;
+        metrics.recordCacheSharedError();
+        logger.debug("cache.shared.get_failed", { key, error: err instanceof Error ? err.message : "unknown" });
+      }
     }
 
     const pending = this.inFlight.get(key);
@@ -185,6 +243,26 @@ export class CacheService {
       return staleEntry.value;
     }
 
+    // Check shared adapter on local miss (distributed cache read-through)
+    if (this.shared) {
+      try {
+        const sharedVal = await this.shared.get(key);
+        if (sharedVal !== null) {
+          this.stats.sharedHits++;
+          metrics.recordCacheSharedHit();
+          const parsed = JSON.parse(sharedVal) as T;
+          this.set(key, parsed);
+          return parsed;
+        }
+        this.stats.sharedMisses++;
+        metrics.recordCacheSharedMiss();
+      } catch (err) {
+        this.stats.sharedErrors++;
+        metrics.recordCacheSharedError();
+        logger.debug("cache.shared.getOrSetStale_failed", { key, error: err instanceof Error ? err.message : "unknown" });
+      }
+    }
+
     const pending = this.inFlight.get(key);
     if (pending) {
       return pending as Promise<T>;
@@ -208,9 +286,12 @@ export class CacheService {
     return promise;
   }
 
-  clear(): void {
+  async clear(): Promise<void> {
     this.store.clear();
     this.inFlight.clear();
+    if (this.shared) {
+      await this.shared.clear().catch(() => {});
+    }
   }
 
   get size(): number {
@@ -227,7 +308,7 @@ export class CacheService {
   }
 
   resetStats(): void {
-    this.stats = { hits: 0, misses: 0, sets: 0, deletes: 0, evictions: 0, errors: 0, staleResponses: 0 };
+    this.stats = { hits: 0, misses: 0, sets: 0, deletes: 0, evictions: 0, errors: 0, staleResponses: 0, sharedHits: 0, sharedMisses: 0, sharedErrors: 0 };
   }
 
   private evictOldest(): void {

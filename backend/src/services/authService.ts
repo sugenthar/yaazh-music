@@ -1,22 +1,15 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import env from "../config/env";
-import { getDb } from "../config/database";
 import { AppError, ConflictError, NotFoundError } from "../utils/helpers";
 import { PublicUser, User } from "../types";
+import { userRepository, toPublicUser } from "../repositories";
 
 export interface RegisterInput {
   name: string;
   email: string;
   password: string;
 }
-
-const toPublicUser = (user: User): PublicUser => ({
-  id: user.id,
-  name: user.name,
-  email: user.email,
-  createdAt: user.created_at,
-});
 
 const signToken = (user: PublicUser): string => {
   return jwt.sign(
@@ -29,28 +22,23 @@ const signToken = (user: PublicUser): string => {
   );
 };
 
-export const findUserByEmail = (email: string): User | undefined => {
-  const db = getDb();
-  return db.prepare("SELECT * FROM users WHERE email = ?").get(email.toLowerCase()) as
-    | User
-    | undefined;
-};
+export const findUserByEmail = (email: string): User | undefined =>
+  userRepository.findByEmail(email);
 
-export const createUser = async (input: RegisterInput): Promise<{ user: PublicUser; token: string }> => {
-  const db = getDb();
+export const createUser = async (
+  input: RegisterInput
+): Promise<{ user: PublicUser; token: string }> => {
   const existing = findUserByEmail(input.email);
   if (existing) {
     throw new ConflictError("Email already registered");
   }
 
   const hash = await bcrypt.hash(input.password, env.bcryptRounds);
-  const result = db
-    .prepare("INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)")
-    .run(input.name.trim(), input.email.toLowerCase(), hash);
-
-  const user = db
-    .prepare("SELECT * FROM users WHERE id = ?")
-    .get(result.lastInsertRowid) as User;
+  const user = userRepository.create({
+    name: input.name,
+    email: input.email,
+    passwordHash: hash,
+  });
 
   const publicUser = toPublicUser(user);
   return { user: publicUser, token: signToken(publicUser) };
@@ -60,7 +48,6 @@ export const verifyCredentials = async (
   email: string,
   password: string
 ): Promise<{ user: PublicUser; token: string }> => {
-  const db = getDb();
   const user = findUserByEmail(email);
   if (!user) {
     await bcrypt.compare(password, "$2a$10$N9qo8uLOickgx2ZMRZoMye");
@@ -77,8 +64,7 @@ export const verifyCredentials = async (
 };
 
 export const getUserById = (id: number): PublicUser | null => {
-  const db = getDb();
-  const user = db.prepare("SELECT * FROM users WHERE id = ?").get(id) as User | undefined;
+  const user = userRepository.findById(id);
   return user ? toPublicUser(user) : null;
 };
 
