@@ -1,5 +1,4 @@
 import { Router } from "express";
-import { z } from "zod";
 import {
   addSongToPlaylist,
   createPlaylist,
@@ -11,21 +10,18 @@ import {
 } from "../controllers/playlistController";
 import { requireAuth } from "../middleware/auth";
 import { validateBody, validateParams } from "../middleware/validate";
+import { noCacheHeaders } from "../middleware/cacheHeaders";
 import {
   addPlaylistSongSchema,
   idParamSchema,
   playlistNameSchema,
+  playlistSongParamSchema,
   playlistUpdateSchema,
 } from "../validations/schemas";
 
-const playlistSongParamSchema = z.object({
-  id: z.coerce.number().int().positive("Invalid id"),
-  songId: z.string().min(1, "Invalid song id"),
-});
-
 const router = Router();
 
-router.use(requireAuth);
+router.use(noCacheHeaders, requireAuth);
 
 router.get("/", getPlaylists);
 router.post("/", validateBody(playlistNameSchema), createPlaylist);

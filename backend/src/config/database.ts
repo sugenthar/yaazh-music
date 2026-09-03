@@ -3,8 +3,12 @@ import fs from "fs";
 import path from "path";
 import env from "./env";
 import { logger } from "../utils/logger";
+import { metrics } from "../services/metrics";
 
 let db: Database.Database | null = null;
+let preparedStatements: Map<string, Database.Statement> | null = null;
+
+const DB_BUSY_TIMEOUT_MS = 5000;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS users (
@@ -70,7 +74,46 @@ CREATE INDEX IF NOT EXISTS idx_playlists_user ON playlists(user_id);
 CREATE INDEX IF NOT EXISTS idx_playlists_user_created ON playlists(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_moods_user ON moods(user_id);
 CREATE INDEX IF NOT EXISTS idx_moods_created ON moods(created_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_history_song ON listening_history(song_id);
 `;
+
+interface Migration {
+  version: number;
+  name: string;
+  up: (database: Database.Database) => void;
+}
+
+const MIGRATIONS: Migration[] = [
+  {
+    version: 2,
+    name: "migrate-catalog-removal",
+    up: (database) => {
+      database.exec(`
+        DROP TABLE IF EXISTS songs;
+        DROP TABLE IF EXISTS albums;
+        DROP TABLE IF EXISTS artists;
+        DROP TABLE IF EXISTS listening_history;
+        DROP TABLE IF EXISTS likes;
+        DROP TABLE IF EXISTS playlist_songs;
+        DROP TABLE IF EXISTS playlists;
+        DROP TABLE IF EXISTS users;
+        DROP TABLE IF EXISTS moods;
+      `);
+      database.exec(SCHEMA);
+      database.pragma("user_version = 2");
+    },
+  },
+  {
+    version: 3,
+    name: "add-history-song-index",
+    up: (database) => {
+      database.exec(
+        "CREATE INDEX IF NOT EXISTS idx_history_song ON listening_history(song_id);"
+      );
+      database.pragma("user_version = 3");
+    },
+  },
+];
 
 const MIGRATE_CATALOG_REMOVAL = `
 DROP TABLE IF EXISTS listening_history;
@@ -81,29 +124,66 @@ DROP TABLE IF EXISTS albums;
 DROP TABLE IF EXISTS artists;
 `;
 
-export const getDb = (): Database.Database => {
-  if (db) return db;
-
+const openDatabase = (): Database.Database => {
   const dir = path.dirname(env.dbPath);
   if (dir && !fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
 
-  db = new Database(env.dbPath);
-  db.pragma("journal_mode = WAL");
-  db.pragma("foreign_keys = ON");
-  db.pragma("synchronous = NORMAL");
-  db.exec(SCHEMA);
+  const database = new Database(env.dbPath);
+  database.pragma("journal_mode = WAL");
+  database.pragma("foreign_keys = ON");
+  database.pragma("synchronous = NORMAL");
+  database.pragma(`busy_timeout = ${DB_BUSY_TIMEOUT_MS}`);
+  return database;
+};
 
-  const version: number = (db.pragma("user_version", { simple: true }) as number) || 0;
-  if (version < 2) {
-    db.pragma("foreign_keys = OFF");
-    db.exec(MIGRATE_CATALOG_REMOVAL);
-    db.exec(SCHEMA);
-    db.pragma("foreign_keys = ON");
-    db.pragma("user_version = 2");
+export const getDb = (): Database.Database => {
+  if (db) return db;
+  db = openDatabase();
+  migrate();
+  return db;
+};
+
+export const migrate = (): void => {
+  const database = getRawDb();
+  let current = (database.pragma("user_version", { simple: true }) as number) || 0;
+
+  if (current < 2) {
+    database.pragma("foreign_keys = OFF");
+    database.exec(MIGRATE_CATALOG_REMOVAL);
+    database.exec(SCHEMA);
+    database.pragma("foreign_keys = ON");
+    database.pragma("user_version = 2");
+    current = 2;
   }
 
+  for (const migration of MIGRATIONS) {
+    if (migration.version > current) {
+      try {
+        database.transaction(() => migration.up(database))();
+        logger.info("database.migration.applied", {
+          version: migration.version,
+          name: migration.name,
+          previous: current,
+        });
+        current = migration.version;
+      } catch (err) {
+        logger.error("database.migration.failed", {
+          version: migration.version,
+          name: migration.name,
+          error: err instanceof Error ? err.message : "unknown",
+        });
+        throw err;
+      }
+    }
+  }
+};
+
+const getRawDb = (): Database.Database => {
+  if (!db) {
+    db = openDatabase();
+  }
   return db;
 };
 
@@ -152,5 +232,6 @@ export const closeDb = (): void => {
       });
     }
     db = null;
+    preparedStatements = null;
   }
 };

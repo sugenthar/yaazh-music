@@ -1,6 +1,7 @@
 import express, { Express, Request, Response } from "express";
 import cors from "cors";
 import helmet from "helmet";
+import compression from "compression";
 import rateLimit from "express-rate-limit";
 import env from "./config/env";
 import { initDb, closeDb, validateDb } from "./config/database";
@@ -22,6 +23,8 @@ import { audiusProvider } from "./modules/music/providers/audius.provider";
 import { GitHubProvider } from "./modules/music/providers/github.provider";
 import { DemoProvider } from "./modules/music/providers/demo.provider";
 import { cacheKeys } from "./services/cache";
+import { metrics } from "./services/metrics";
+import { publicCacheHeaders, noCacheHeaders } from "./middleware/cacheHeaders";
 
 const registerProviders = (): void => {
   providerManager.register(audiusProvider);
@@ -48,16 +51,63 @@ const createApp = (): Express => {
   initDb();
   registerProviders();
 
+  app.disable("x-powered-by");
   app.use(helmet());
+
+  if (env.trustProxy) {
+    app.set("trust proxy", true);
+  }
+
   app.use(requestIdMiddleware);
 
   app.use(
     cors({
       origin: env.corsOrigin === "*" ? true : env.corsOrigin.split(","),
+      credentials: env.corsOrigin !== "*",
     })
   );
 
+  if (env.enableCompression) {
+    app.use(compression());
+  }
+
   app.use(express.json({ limit: env.maxBodyBytes }));
+  app.use(express.urlencoded({ extended: true, limit: env.maxBodyBytes }));
+
+  app.use(
+    "/api/auth",
+    rateLimit({
+      windowMs: env.rateLimitAuthWindowMs,
+      max: env.rateLimitAuthMax,
+      standardHeaders: true,
+      legacyHeaders: false,
+      message: {
+        success: false,
+        error: { code: "RATE_LIMITED", message: "Too many authentication requests" },
+      },
+    })
+  );
+
+  app.use(
+    rateLimit({
+      windowMs: env.rateLimitSearchWindowMs,
+      max: env.rateLimitSearchMax,
+      standardHeaders: true,
+      legacyHeaders: false,
+      skip: (req) => {
+        const path = req.path;
+        return !(
+          path.startsWith("/api/search") ||
+          path.startsWith("/api/songs/search") ||
+          (path.startsWith("/api/music") && path.endsWith("/search"))
+        );
+      },
+      message: {
+        success: false,
+        error: { code: "RATE_LIMITED", message: "Too many search requests" },
+      },
+    })
+  );
 
   app.use(
     "/api",
@@ -73,51 +123,75 @@ const createApp = (): Express => {
     })
   );
 
-  app.use(
-    "/api/auth",
-    rateLimit({
-      windowMs: 15 * 60 * 1000,
-      max: env.rateLimitAuthMax,
-      standardHeaders: true,
-      legacyHeaders: false,
-      message: {
-        success: false,
-        error: { code: "RATE_LIMITED", message: "Too many authentication requests" },
-      },
-    })
-  );
-
   app.use(requestLogger);
 
   app.get("/health", (_req: Request, res: Response) => {
     const dbOk = validateDb();
+    const serviceOk = true;
+    const healthy = dbOk && serviceOk;
     ok(res, {
-      status: "ok",
+      status: healthy ? "ok" : "degraded",
       service: "yaazh-music-backend",
       version: "1.3.0",
       timestamp: new Date().toISOString(),
       database: dbOk ? "ok" : "degraded",
-    });
+    }, healthy ? 200 : 503);
   });
 
-  app.get("/ready", (_req: Request, res: Response) => {
+  app.get("/ready", async (_req: Request, res: Response) => {
     const dbOk = validateDb();
-    const ready = dbOk;
-    if (ready) {
-      ok(res, { status: "ready", timestamp: new Date().toISOString() });
+    const providerStatuses = await providerManager.health().catch(() => [] as ReturnType<typeof providerManager.health> extends Promise<infer T> ? T : never[]);
+    const anyProviderAvailable = providerStatuses.some(
+      (p) => p.isAvailable || p.circuitState === "closed" || p.circuitState === "half-open"
+    );
+
+    if (dbOk && anyProviderAvailable) {
+      ok(res, {
+        status: "ready",
+        timestamp: new Date().toISOString(),
+        providers: providerStatuses.map((p) => ({
+          name: p.name,
+          available: p.isAvailable,
+          circuitState: p.circuitState,
+        })),
+      });
     } else {
       res.status(503).json({
         success: false,
-        error: { code: "NOT_READY", message: "Service is not ready" },
+        error: {
+          code: "NOT_READY",
+          message: "Service is not ready",
+          details: {
+            database: dbOk ? "ok" : "degraded",
+            providers: providerStatuses.map((p) => ({
+              name: p.name,
+              available: p.isAvailable,
+              circuitState: p.circuitState,
+            })),
+          },
+        },
       });
     }
   });
 
-  app.get("/api/search", validateQuery(searchQuerySchema), searchAll);
+  app.get(
+    "/api/metrics",
+    requireAuth,
+    (_req: Request, res: Response) => {
+      const snapshot = metrics.getSnapshot();
+      const cacheStats = cacheService.getStats();
+      ok(res, {
+        metrics: snapshot,
+        cache: cacheStats,
+      });
+    }
+  );
 
-  app.use("/api/music", musicRoutes);
+  app.get("/api/search", publicCacheHeaders, validateQuery(searchQuerySchema), searchAll);
 
-  app.get("/api/library", requireAuth, getLibrary);
+  app.use("/api/music", publicCacheHeaders, musicRoutes);
+
+  app.get("/api/library", noCacheHeaders, requireAuth, getLibrary);
 
   app.use("/api", routes);
 
@@ -139,7 +213,11 @@ const startServer = () => {
     });
   });
 
+  let shuttingDown = false;
+
   const shutdown = (signal: string) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
     logger.info("server.shutdown.initiated", { signal });
 
     if (healthCheckInterval) {
@@ -147,18 +225,26 @@ const startServer = () => {
       healthCheckInterval = null;
     }
 
-    server.close(() => {
-      cacheService.clear();
-      providerManager.reset();
-      closeDb();
-      logger.info("server.shutdown.complete");
-      process.exit(0);
-    });
-
-    setTimeout(() => {
+    const forceExitTimer = setTimeout(() => {
       logger.error("server.shutdown.timeout", { message: "Forced exit after timeout" });
       process.exit(1);
-    }, 10_000).unref();
+    }, env.shutdownTimeoutMs);
+    forceExitTimer.unref();
+
+    server.close(async () => {
+      try {
+        cacheService.clear();
+        providerManager.reset();
+        closeDb();
+        logger.info("server.shutdown.complete");
+        process.exit(0);
+      } catch (err) {
+        logger.error("server.shutdown.failed", {
+          error: err instanceof Error ? err.message : "unknown",
+        });
+        process.exit(1);
+      }
+    });
   };
 
   process.on("SIGINT", () => shutdown("SIGINT"));

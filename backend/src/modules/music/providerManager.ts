@@ -1,6 +1,7 @@
 import { logger } from "../../utils/logger";
 import { CircuitBreaker } from "../../utils/circuitBreaker";
 import env from "../../config/env";
+import { metrics } from "../../services/metrics";
 import { YaazhSong, MusicSearchResult } from "./music.types";
 import { MusicProvider, ProviderSearchResult, ProviderHealth } from "./providers/music-provider.interface";
 
@@ -58,6 +59,7 @@ export class ProviderManager {
     const available = this.getAvailableProviders();
     if (available.length === 0) {
       logger.warn("provider_manager.no_providers_available", { query, page, limit });
+      metrics.recordProviderFallback();
       return this.tryFallbackSearch(query, page, limit);
     }
 
@@ -69,6 +71,7 @@ export class ProviderManager {
         const result = await provider.search(query, page, limit);
         const latencyMs = Date.now() - started;
         breaker.recordSuccess();
+        metrics.recordProviderCall(provider.name, latencyMs);
         if (env.nodeEnv !== "test") {
           logger.info("provider_manager.search.success", {
             provider: provider.name,
@@ -91,6 +94,7 @@ export class ProviderManager {
           err instanceof Error &&
           (err.name === "AbortError" || err.message.includes("timeout"));
         breaker.recordFailure(isTimeout);
+        metrics.recordProviderFailure();
         lastError = err instanceof Error ? err : new Error(String(err));
         logger.warn("provider_manager.search.fail", {
           provider: provider.name,
@@ -101,6 +105,7 @@ export class ProviderManager {
       }
     }
 
+    metrics.recordProviderFallback();
     return this.tryFallbackSearch(query, page, limit);
   }
 
@@ -116,6 +121,7 @@ export class ProviderManager {
         const started = Date.now();
         const result = await provider.search(query, page, limit);
         const latencyMs = Date.now() - started;
+        metrics.recordProviderCall(provider.name, latencyMs);
         logger.info("provider_manager.fallback.success", {
           provider: provider.name,
           query,
@@ -130,9 +136,11 @@ export class ProviderManager {
           hasNextPage: result.hasNextPage,
         };
       } catch {
+        metrics.recordProviderFailure();
         continue;
       }
     }
+    logger.warn("provider_manager.all_providers_failed", { query, page, limit });
     return {
       query,
       page,
@@ -155,6 +163,7 @@ export class ProviderManager {
       } catch {
         const breaker = this.breakers.get(provider.name);
         breaker?.recordFailure(false);
+        metrics.recordProviderFailure();
       }
     }
 
@@ -164,6 +173,7 @@ export class ProviderManager {
         const song = await provider.getById(songId);
         if (song) return song;
       } catch {
+        metrics.recordProviderFailure();
         continue;
       }
     }

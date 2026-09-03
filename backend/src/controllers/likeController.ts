@@ -1,10 +1,22 @@
 import { Request, Response } from "express";
-import { getDb } from "../config/database";
+import { getDb, runInTransaction } from "../config/database";
 import { AuthRequest } from "../middleware/auth";
 import { resolveSongSnapshot } from "../modules/music/music.service";
 import { asyncHandler, ok } from "../utils/helpers";
 
 const snapshotJson = (song: { id: string }): string => JSON.stringify(song);
+
+const parseSnapshot = (json: string | null, fallbackId: string): unknown => {
+  if (json) {
+    try {
+      const parsed = JSON.parse(json);
+      return parsed || null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+};
 
 export const likeSong = asyncHandler(async (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
@@ -23,9 +35,11 @@ export const likeSong = asyncHandler(async (req: Request, res: Response) => {
     return ok(res, { liked: true, songId }, 200);
   }
 
-  db.prepare(
-    "INSERT INTO likes (user_id, song_id, song_json) VALUES (?, ?, ?)"
-  ).run(userId, songId, song ? snapshotJson(song) : null);
+  runInTransaction(() => {
+    db.prepare(
+      "INSERT INTO likes (user_id, song_id, song_json) VALUES (?, ?, ?)"
+    ).run(userId, songId, song ? snapshotJson(song) : null);
+  });
   ok(res, { liked: true, songId }, 201);
 });
 
@@ -48,14 +62,14 @@ export const getLibrary = asyncHandler(async (req: Request, res: Response) => {
     .prepare(
       `SELECT song_id, song_json, created_at FROM likes
        WHERE user_id = ?
-       ORDER BY created_at DESC`
+       ORDER BY created_at DESC, id DESC`
     )
     .all(userId) as { song_id: string; song_json: string | null; created_at: string }[];
 
   const likedSongs = likedRows.map((row) => {
-    const snapshots = row.song_json ? JSON.parse(row.song_json) : null;
+    const snapshot = parseSnapshot(row.song_json, row.song_id);
     return (
-      snapshots || {
+      snapshot || {
         id: row.song_id,
         songId: row.song_id,
         artwork: null,

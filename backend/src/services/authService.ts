@@ -2,7 +2,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import env from "../config/env";
 import { getDb } from "../config/database";
-import { AppError } from "../utils/helpers";
+import { AppError, ConflictError, NotFoundError } from "../utils/helpers";
 import { PublicUser, User } from "../types";
 
 export interface RegisterInput {
@@ -22,7 +22,10 @@ const signToken = (user: PublicUser): string => {
   return jwt.sign(
     { id: user.id, email: user.email, name: user.name },
     env.jwtSecret,
-    { expiresIn: env.jwtExpiresIn as jwt.SignOptions["expiresIn"] }
+    {
+      expiresIn: env.jwtExpiresIn as jwt.SignOptions["expiresIn"],
+      algorithm: env.jwtAlgorithm,
+    }
   );
 };
 
@@ -37,13 +40,13 @@ export const createUser = async (input: RegisterInput): Promise<{ user: PublicUs
   const db = getDb();
   const existing = findUserByEmail(input.email);
   if (existing) {
-    throw new AppError("Email already registered", 409, "EMAIL_TAKEN");
+    throw new ConflictError("Email already registered");
   }
 
   const hash = await bcrypt.hash(input.password, env.bcryptRounds);
   const result = db
     .prepare("INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)")
-    .run(input.name, input.email.toLowerCase(), hash);
+    .run(input.name.trim(), input.email.toLowerCase(), hash);
 
   const user = db
     .prepare("SELECT * FROM users WHERE id = ?")
@@ -60,6 +63,7 @@ export const verifyCredentials = async (
   const db = getDb();
   const user = findUserByEmail(email);
   if (!user) {
+    await bcrypt.compare(password, "$2a$10$N9qo8uLOickgx2ZMRZoMye");
     throw new AppError("Invalid email or password", 401, "INVALID_CREDENTIALS");
   }
 
@@ -76,4 +80,12 @@ export const getUserById = (id: number): PublicUser | null => {
   const db = getDb();
   const user = db.prepare("SELECT * FROM users WHERE id = ?").get(id) as User | undefined;
   return user ? toPublicUser(user) : null;
+};
+
+export const getUserByIdOrThrow = (id: number): PublicUser => {
+  const user = getUserById(id);
+  if (!user) {
+    throw new NotFoundError("User not found");
+  }
+  return user;
 };

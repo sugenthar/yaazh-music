@@ -35,9 +35,20 @@ const envSchema = z.object({
   rateLimitGeneralMax: z.number().int().positive().default(1000),
   rateLimitWindowMs: z.number().int().positive().default(15 * 60 * 1000),
   rateLimitAuthMax: z.number().int().positive().default(20),
+  rateLimitSearchMax: z.number().int().positive().default(100),
   maxBodyBytes: z.number().int().positive().default(1_000_000),
   enableStaleWhileRevalidate: z.boolean().default(true),
   appName: z.string().default("yaazh-music"),
+  requestIdHeader: z.string().default("x-request-id"),
+  shutdownTimeoutMs: z.number().int().positive().default(10_000),
+  enableCompression: z.boolean().default(true),
+  passwordMinLength: z.number().int().min(6).max(64).default(6),
+  jwtAlgorithm: z.enum(["HS256", "HS384", "HS512"]).default("HS256"),
+  historyMaxEntries: z.number().int().positive().default(500),
+  trustProxy: z.boolean().default(false),
+  rateLimitAuthWindowMs: z.number().int().positive().default(15 * 60 * 1000),
+  rateLimitSearchWindowMs: z.number().int().positive().default(15 * 60 * 1000),
+  logLevel: z.enum(["debug", "info", "warn", "error"]).default("info"),
 });
 
 const raw = {
@@ -63,9 +74,20 @@ const raw = {
   rateLimitGeneralMax: toInt(process.env.RATE_LIMIT_GENERAL_MAX, 1000),
   rateLimitWindowMs: toInt(process.env.RATE_LIMIT_WINDOW_MS, 15 * 60 * 1000),
   rateLimitAuthMax: toInt(process.env.RATE_LIMIT_AUTH_MAX, 20),
+  rateLimitSearchMax: toInt(process.env.RATE_LIMIT_SEARCH_MAX, 100),
   maxBodyBytes: toInt(process.env.MAX_BODY_BYTES, 1_000_000),
   enableStaleWhileRevalidate: toBool(process.env.ENABLE_STALE_WHILE_REVALIDATE, true),
   appName: process.env.APP_NAME || "yaazh-music",
+  requestIdHeader: process.env.REQUEST_ID_HEADER || "x-request-id",
+  shutdownTimeoutMs: toInt(process.env.SHUTDOWN_TIMEOUT_MS, 10_000),
+  enableCompression: toBool(process.env.ENABLE_COMPRESSION, true),
+  passwordMinLength: toInt(process.env.PASSWORD_MIN_LENGTH, 6),
+  jwtAlgorithm: (process.env.JWT_ALGORITHM as "HS256" | "HS384" | "HS512") || "HS256",
+  historyMaxEntries: toInt(process.env.HISTORY_MAX_ENTRIES, 500),
+  trustProxy: toBool(process.env.TRUST_PROXY, false),
+  rateLimitAuthWindowMs: toInt(process.env.RATE_LIMIT_AUTH_WINDOW_MS, 15 * 60 * 1000),
+  rateLimitSearchWindowMs: toInt(process.env.RATE_LIMIT_SEARCH_WINDOW_MS, 15 * 60 * 1000),
+  logLevel: (process.env.LOG_LEVEL as "debug" | "info" | "warn" | "error") || "info",
 };
 
 const parsed = envSchema.safeParse(raw);
@@ -96,9 +118,20 @@ const env = {
   rateLimitGeneralMax: parsed.data.rateLimitGeneralMax,
   rateLimitWindowMs: parsed.data.rateLimitWindowMs,
   rateLimitAuthMax: parsed.data.rateLimitAuthMax,
+  rateLimitSearchMax: parsed.data.rateLimitSearchMax,
   maxBodyBytes: parsed.data.maxBodyBytes,
   enableStaleWhileRevalidate: parsed.data.enableStaleWhileRevalidate,
   appName: parsed.data.appName,
+  requestIdHeader: parsed.data.requestIdHeader,
+  shutdownTimeoutMs: parsed.data.shutdownTimeoutMs,
+  enableCompression: parsed.data.enableCompression,
+  passwordMinLength: parsed.data.passwordMinLength,
+  jwtAlgorithm: parsed.data.jwtAlgorithm,
+  historyMaxEntries: parsed.data.historyMaxEntries,
+  trustProxy: parsed.data.trustProxy,
+  rateLimitAuthWindowMs: parsed.data.rateLimitAuthWindowMs,
+  rateLimitSearchWindowMs: parsed.data.rateLimitSearchWindowMs,
+  logLevel: parsed.data.logLevel,
 };
 
 if (env.nodeEnv === "production" && env.jwtSecret === "dev-secret-do-not-use-in-production") {

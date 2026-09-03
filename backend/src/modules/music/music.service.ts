@@ -70,15 +70,16 @@ export const getSongBySourceId = async (songId: string): Promise<YaazhSong> => {
   const cacheKey = cacheKeys.songById(songId);
 
   try {
-    const cached = cacheService.get<YaazhSong>(cacheKey);
-    if (cached) return cached;
-
-    const song = await providerManager.getById(songId);
-    if (!song) {
-      throw new AppError("Song not found", 404, "SONG_NOT_FOUND");
-    }
-    cacheService.set(cacheKey, song);
-    return song;
+    return await cacheService.getOrSet<YaazhSong>(
+      cacheKey,
+      async () => {
+        const song = await providerManager.getById(songId);
+        if (!song) {
+          throw new AppError("Song not found", 404, "SONG_NOT_FOUND");
+        }
+        return song;
+      }
+    );
   } catch (err) {
     if (err instanceof AppError) throw err;
     throw new AppError(PROVIDER_UNAVAILABLE_MESSAGE, 503, PROVIDER_UNAVAILABLE_CODE);

@@ -1,6 +1,11 @@
 import { Request, Response, NextFunction } from "express";
-import { AppError } from "../utils/helpers";
+import { AppError, RateLimitError, sanitizeLogFields } from "../utils/helpers";
 import { logger } from "../utils/logger";
+import { metrics } from "../services/metrics";
+
+interface RequestWithId extends Request {
+  id?: string;
+}
 
 export const notFoundHandler = (req: Request, res: Response, next: NextFunction) => {
   next(new AppError(`Route not found: ${req.method} ${req.originalUrl}`, 404, "NOT_FOUND"));
@@ -12,7 +17,27 @@ export const errorHandler = (
   res: Response,
   _next: NextFunction
 ) => {
+  const requestId = (req as RequestWithId).id;
+
+  if (err instanceof RateLimitError) {
+    metrics.recordRateLimitRejection();
+    res.setHeader("Retry-After", String(err.retryAfterSeconds));
+    return res.status(429).json({
+      success: false,
+      error: { code: err.code, message: err.message },
+    });
+  }
+
   if (err instanceof AppError) {
+    if (err.statusCode >= 500) {
+      logger.error("app_error", {
+        requestId,
+        code: err.code,
+        message: err.message,
+        status: err.statusCode,
+        retryable: err.retryable,
+      });
+    }
     return res.status(err.statusCode).json({
       success: false,
       error: { code: err.code, message: err.message },
@@ -46,11 +71,25 @@ export const errorHandler = (
     });
   }
 
-  logger.error("unhandled_error", {
-    requestId: (req as Request & { id?: string })?.id,
+  if (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    typeof (err as { code: string }).code === "string" &&
+    (err as { code: string }).code.startsWith("SQLITE")
+  ) {
+    metrics.recordDatabaseError();
+    logger.error("database_error", sanitizeLogFields({
+      requestId,
+      error: err instanceof Error ? err.message : String(err),
+    }));
+  }
+
+  logger.error("unhandled_error", sanitizeLogFields({
+    requestId,
     error: err instanceof Error ? err.message : String(err),
-    stack: err instanceof Error ? err.stack : undefined,
-  });
+    stack: process.env.NODE_ENV === "production" ? undefined : err instanceof Error ? err.stack : undefined,
+  }));
 
   const message =
     process.env.NODE_ENV === "production"

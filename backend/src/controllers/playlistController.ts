@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { getDb } from "../config/database";
+import { getDb, runInTransaction } from "../config/database";
 import { AuthRequest } from "../middleware/auth";
 import { resolveSongSnapshot } from "../modules/music/music.service";
 import { asyncHandler, ok, AppError } from "../utils/helpers";
@@ -20,8 +20,12 @@ interface PlaylistSongRow {
 
 const parseSnapshot = (row: PlaylistSongRow) => {
   if (row.song_json) {
-    const parsed = JSON.parse(row.song_json);
-    if (parsed && parsed.id) return parsed;
+    try {
+      const parsed = JSON.parse(row.song_json);
+      if (parsed && parsed.id) return parsed;
+    } catch {
+      // fall through
+    }
   }
   return { id: row.song_id, songId: row.song_id };
 };
@@ -115,14 +119,17 @@ export const deletePlaylist = asyncHandler(async (req: Request, res: Response) =
   const authReq = req as AuthRequest;
   const userId = authReq.user!.id;
   const playlistId = Number(req.params.id);
-  const db = getDb();
 
   const row = getOwnedPlaylist(userId, playlistId);
   if (!row) {
     throw new AppError("Playlist not found", 404, "PLAYLIST_NOT_FOUND");
   }
 
-  db.prepare("DELETE FROM playlists WHERE id = ?").run(playlistId);
+  runInTransaction(() => {
+    const db = getDb();
+    db.prepare("DELETE FROM playlist_songs WHERE playlist_id = ?").run(playlistId);
+    db.prepare("DELETE FROM playlists WHERE id = ?").run(playlistId);
+  });
   ok(res, { deleted: true, playlistId });
 });
 
@@ -147,9 +154,11 @@ export const addSongToPlaylist = asyncHandler(async (req: Request, res: Response
     return ok(res, { added: true, songId });
   }
 
-  db.prepare(
-    "INSERT INTO playlist_songs (playlist_id, song_id, song_json) VALUES (?, ?, ?)"
-  ).run(playlistId, songId, song ? JSON.stringify(song) : null);
+  runInTransaction(() => {
+    db.prepare(
+      "INSERT INTO playlist_songs (playlist_id, song_id, song_json) VALUES (?, ?, ?)"
+    ).run(playlistId, songId, song ? JSON.stringify(song) : null);
+  });
   ok(res, { added: true, songId }, 201);
 });
 

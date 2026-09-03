@@ -42,6 +42,11 @@ const UNKNOWN_ARTIST = "Unknown Artist";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const withJitter = (baseMs: number): number => {
+  const jitter = Math.random() * baseMs * 0.25;
+  return Math.round(baseMs + jitter);
+};
+
 const isJsonRecord = (value: unknown): value is JsonRecord =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 
@@ -236,7 +241,12 @@ export class AudiusProvider implements MusicProvider {
           }
           lastError = error;
           if (retryable && attempt < maxRetries) {
-            await sleep(BACKOFF_MS * 2 ** attempt);
+            const retryAfter = response.headers.get("retry-after");
+            if (retryAfter && /^\d+$/.test(retryAfter.trim())) {
+              await sleep(Number(retryAfter.trim()) * 1000);
+            } else {
+              await sleep(withJitter(BACKOFF_MS * 2 ** attempt));
+            }
             continue;
           }
           throw error;
@@ -247,7 +257,7 @@ export class AudiusProvider implements MusicProvider {
             retryable: true,
           });
           if (attempt < maxRetries) {
-            await sleep(BACKOFF_MS * 2 ** attempt);
+            await sleep(withJitter(BACKOFF_MS * 2 ** attempt));
             continue;
           }
           throw lastError;
@@ -270,7 +280,7 @@ export class AudiusProvider implements MusicProvider {
           status: err instanceof Error && err.name === "AbortError" ? undefined : 0,
         });
         if (attempt < maxRetries) {
-          await sleep(BACKOFF_MS * 2 ** attempt);
+          await sleep(withJitter(BACKOFF_MS * 2 ** attempt));
           continue;
         }
         throw lastError;

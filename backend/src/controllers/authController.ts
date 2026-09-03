@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import {
   createUser,
   verifyCredentials,
-  getUserById,
+  getUserByIdOrThrow,
 } from "../services/authService";
 import { asyncHandler, AppError, ok } from "../utils/helpers";
 import { AuthRequest } from "../middleware/auth";
@@ -30,9 +30,6 @@ export const me = asyncHandler(async (req: Request, res: Response) => {
   if (!authReq.user) {
     throw new AppError("Authentication required", 401, "UNAUTHORIZED");
   }
-  const user = getUserById(authReq.user.id);
-  if (!user) {
-    throw new AppError("User not found", 404, "USER_NOT_FOUND");
-  }
+  const user = getUserByIdOrThrow(authReq.user.id);
   ok(res, { user });
 });
