@@ -64,6 +64,9 @@ vi.mock("../src/modules/music/providers/audius.provider", () => {
 
   return {
     audiusProvider: {
+      name: "audius",
+      priority: 1,
+      isAvailable: vi.fn(() => true),
       search: vi.fn(async (query: string, page: number, limit: number) => {
         const all = (MOCK_RAW_SONGS as Record<string, any>[]).filter(
           (s) => !query || query.toLowerCase() === "tamil" || matches(s, query)
@@ -120,7 +123,7 @@ describe("Health endpoint", () => {
     const res = await request(app).get("/health").expect(200);
     expect(res.body.success).toBe(true);
     expect(res.body.data.status).toBe("ok");
-    expect(res.body.data.version).toBe("1.2.0");
+    expect(res.body.data.version).toBe("1.3.0");
   });
 });
 
@@ -199,17 +202,16 @@ describe("Music search API", () => {
     expect(res.body.error.code).toBe("INVALID_REQUEST");
   });
 
-  it("returns MUSIC_PROVIDER_UNAVAILABLE when the provider fails", async () => {
+  it("returns fallback songs when the primary provider fails", async () => {
     const { audiusProvider } = await import(
       "../src/modules/music/providers/audius.provider"
     );
     (audiusProvider.search as unknown as {
       mockRejectedValueOnce: (value: unknown) => void;
     }).mockRejectedValueOnce(new Error("provider exploded"));
-    const res = await request(app).get("/api/music/search?q=hukum").expect(503);
-    expect(res.body.success).toBe(false);
-    expect(res.body.error.code).toBe("MUSIC_PROVIDER_UNAVAILABLE");
-    expect(res.body.error.message).toBe("Music service is temporarily unavailable.");
+    const res = await request(app).get("/api/music/search?q=anirudh").expect(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.songs.length).toBeGreaterThanOrEqual(1);
   });
 });
 

@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { AppError } from "../utils/helpers";
+import { logger } from "../utils/logger";
 
 export const notFoundHandler = (req: Request, res: Response, next: NextFunction) => {
   next(new AppError(`Route not found: ${req.method} ${req.originalUrl}`, 404, "NOT_FOUND"));
@@ -18,7 +19,6 @@ export const errorHandler = (
     });
   }
 
-  // Malformed JSON body / body-parser errors
   const parseError = err as { type?: string; status?: number; statusCode?: number };
   if (
     typeof err === "object" &&
@@ -46,11 +46,12 @@ export const errorHandler = (
     });
   }
 
-  console.error("Unhandled error:", {
+  logger.error("unhandled_error", {
     requestId: (req as Request & { id?: string })?.id,
     error: err instanceof Error ? err.message : String(err),
     stack: err instanceof Error ? err.stack : undefined,
   });
+
   const message =
     process.env.NODE_ENV === "production"
       ? "Internal server error"

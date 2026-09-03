@@ -1,6 +1,7 @@
-import { audiusProvider, ProviderHealth } from "./providers/audius.provider";
+import { providerManager } from "./providerManager";
 import { MusicSearchResult, YaazhSong } from "./music.types";
 import { AppError } from "../../utils/helpers";
+import { cacheService, cacheKeys } from "../../services/cache";
 
 export const PROVIDER_UNAVAILABLE_CODE = "MUSIC_PROVIDER_UNAVAILABLE";
 export const PROVIDER_UNAVAILABLE_MESSAGE = "Music service is temporarily unavailable.";
@@ -29,19 +30,35 @@ export const searchMusic = async (
 ): Promise<MusicSearchResult> => {
   const effectivePage = enforcePage(page);
   const effectiveLimit = enforceLimit(limit);
-  let result;
+  const cacheKey = cacheKeys.musicSearch(query, effectivePage, effectiveLimit);
+
   try {
-    result = await audiusProvider.search(query, effectivePage, effectiveLimit);
+    return await cacheService.getOrSetStale<MusicSearchResult>(
+      cacheKey,
+      async () => {
+        const result = await providerManager.search(query, effectivePage, effectiveLimit);
+        return {
+          query,
+          page: effectivePage,
+          limit: effectiveLimit,
+          songs: result.songs,
+          hasNextPage: result.hasNextPage,
+        };
+      },
+      async (stale) => {
+        const result = await providerManager.search(query, effectivePage, effectiveLimit);
+        return {
+          query,
+          page: effectivePage,
+          limit: effectiveLimit,
+          songs: result.songs,
+          hasNextPage: result.hasNextPage,
+        };
+      }
+    );
   } catch (err) {
     throw new AppError(PROVIDER_UNAVAILABLE_MESSAGE, 503, PROVIDER_UNAVAILABLE_CODE);
   }
-  return {
-    query,
-    page: effectivePage,
-    limit: effectiveLimit,
-    songs: result.songs,
-    hasNextPage: result.hasNextPage,
-  };
 };
 
 export const getDefaultFeed = async (
@@ -50,24 +67,26 @@ export const getDefaultFeed = async (
 ): Promise<MusicSearchResult> => searchMusic(DEFAULT_FEED_QUERY, page, limit);
 
 export const getSongBySourceId = async (songId: string): Promise<YaazhSong> => {
-  let song;
+  const cacheKey = cacheKeys.songById(songId);
+
   try {
-    song = await audiusProvider.getById(songId);
+    const cached = cacheService.get<YaazhSong>(cacheKey);
+    if (cached) return cached;
+
+    const song = await providerManager.getById(songId);
+    if (!song) {
+      throw new AppError("Song not found", 404, "SONG_NOT_FOUND");
+    }
+    cacheService.set(cacheKey, song);
+    return song;
   } catch (err) {
+    if (err instanceof AppError) throw err;
     throw new AppError(PROVIDER_UNAVAILABLE_MESSAGE, 503, PROVIDER_UNAVAILABLE_CODE);
   }
-  if (!song) {
-    throw new AppError("Song not found", 404, "SONG_NOT_FOUND");
-  }
-  return song;
 };
 
-export const checkMusicHealth = async (): Promise<ProviderHealth> => {
-  try {
-    return await audiusProvider.health();
-  } catch (err) {
-    return { status: "unavailable", latencyMs: 0 };
-  }
+export const checkMusicHealth = async () => {
+  return providerManager.health();
 };
 
 const asString = (value: unknown): string =>

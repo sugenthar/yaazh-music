@@ -1,13 +1,14 @@
 import env from "../../../config/env";
 import { logger } from "../../../utils/logger";
 import { YaazhSong } from "../music.types";
+import { MusicProvider, ProviderSearchResult, ProviderHealth } from "./music-provider.interface";
 
-export interface ProviderSearchResult {
+export interface ProviderSearchResultCompat {
   songs: YaazhSong[];
   hasNextPage: boolean;
 }
 
-export interface ProviderHealth {
+export interface ProviderHealthCompat {
   status: "available" | "unavailable";
   latencyMs: number;
 }
@@ -49,11 +50,6 @@ const asString = (value: unknown): string =>
 
 const isHttpUrl = (value: string): boolean => /^https?:\/\//i.test(value);
 
-/**
- * Audius artwork can be a plain URL string or a size map such as:
- * { "150x150": "...", "480x480": "...", "1000x1000": "...", mirrors: [...] }.
- * Pick the largest available size, falling back to any http(s) URL.
- */
 const resolveArtwork = (artwork: unknown): string | null => {
   if (typeof artwork === "string") {
     return artwork.length > 0 && isHttpUrl(artwork) ? artwork : null;
@@ -90,10 +86,15 @@ const dedupeSongs = (songs: YaazhSong[]): YaazhSong[] => {
   return unique;
 };
 
-export class AudiusProvider {
+export { ProviderSearchResult, ProviderHealth };
+
+export class AudiusProvider implements MusicProvider {
+  readonly name = "audius";
+  readonly priority = 1;
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
   private readonly maxRetries: number;
+  private available = true;
 
   constructor(baseUrl: string = env.audiusApiBaseUrl, options: ProviderOptions = {}) {
     this.baseUrl = baseUrl.replace(/\/+$/, "");
@@ -101,10 +102,6 @@ export class AudiusProvider {
     this.maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES;
   }
 
-  /**
-   * Audius /v1/tracks/search supports `limit` and `offset`, so page windows
-   * are requested directly from the provider.
-   */
   async search(query: string, page: number, limit: number): Promise<ProviderSearchResult> {
     const startedAt = Date.now();
     const effectivePage = Math.max(1, Math.floor(page));
@@ -122,6 +119,7 @@ export class AudiusProvider {
       .filter((song): song is YaazhSong => song !== null && song.title.trim().length > 0);
 
     const songs = dedupeSongs(mapped);
+    this.available = true;
     logger.info("provider.search", {
       provider: "audius",
       query,
@@ -145,11 +143,6 @@ export class AudiusProvider {
     return raw ? this.mapTrack(raw) : null;
   }
 
-  /**
-   * Permanent, non-expiring stream URL for a track. The endpoint responds with
-   * a 302 redirect to the content node's signed URL, which audio engines follow
-   * automatically. Never bake signed CDN URLs into the catalog.
-   */
   streamUrl(trackId: string): string {
     const id = trackId.replace(/^audius-/, "");
     return `${this.baseUrl}/v1/tracks/${encodeURIComponent(id)}/stream`;
@@ -159,8 +152,10 @@ export class AudiusProvider {
     const startedAt = Date.now();
     try {
       await this.request("/v1/tracks/search", { query: "test", limit: 1, offset: 0 }, { retries: 0 });
+      this.available = true;
       return { status: "available", latencyMs: Date.now() - startedAt };
     } catch (err) {
+      this.available = false;
       logger.error("provider.health", {
         provider: "audius",
         durationMs: Date.now() - startedAt,
@@ -168,6 +163,14 @@ export class AudiusProvider {
       });
       return { status: "unavailable", latencyMs: Date.now() - startedAt };
     }
+  }
+
+  isAvailable(): boolean {
+    return this.available;
+  }
+
+  reset(): void {
+    this.available = true;
   }
 
   private mapTrack(raw: unknown): YaazhSong | null {

@@ -9,6 +9,7 @@ import {
   enforceLimit,
 } from "./music.service";
 import { MusicSearchResponse } from "./music.types";
+import { providerManager } from "./providerManager";
 
 export const searchMusicController = asyncHandler(
   async (req: Request, res: Response) => {
@@ -60,12 +61,41 @@ export const singleSongController = asyncHandler(
 );
 
 export const musicHealthController = asyncHandler(async (_req: Request, res: Response) => {
-  const health = await checkMusicHealth();
+  const providerStatuses = await checkMusicHealth();
+
+  const detailedStatuses = await Promise.all(
+    providerStatuses.map(async (ps) => {
+      const provider = providerManager.getProvider(ps.name);
+      let healthStatus = ps.isAvailable ? "available" : "unavailable";
+      let latencyMs = 0;
+      try {
+        if (provider) {
+          const h = await provider.health();
+          healthStatus = h.status;
+          latencyMs = h.latencyMs;
+        }
+      } catch {
+        healthStatus = "unavailable";
+      }
+      return {
+        name: ps.name,
+        priority: ps.priority,
+        status: healthStatus,
+        latencyMs,
+        circuitState: ps.circuitState,
+        stats: ps.stats,
+      };
+    })
+  );
+
+  const primary = detailedStatuses.find((p) => p.name === "audius") || detailedStatuses[0];
+
   ok(res, {
     provider: {
-      name: "audius",
-      status: health.status,
-      latencyMs: health.latencyMs,
+      name: primary?.name || "audius",
+      status: primary?.status || "unavailable",
+      latencyMs: primary?.latencyMs || 0,
     },
+    providers: detailedStatuses,
   });
 });

@@ -2,6 +2,7 @@ import Database from "better-sqlite3";
 import fs from "fs";
 import path from "path";
 import env from "./env";
+import { logger } from "../utils/logger";
 
 let db: Database.Database | null = null;
 
@@ -57,12 +58,18 @@ CREATE TABLE IF NOT EXISTS moods (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_likes_user ON likes(user_id);
 CREATE INDEX IF NOT EXISTS idx_likes_song ON likes(song_id);
+CREATE INDEX IF NOT EXISTS idx_likes_user_song ON likes(user_id, song_id);
 CREATE INDEX IF NOT EXISTS idx_playlist_songs_playlist ON playlist_songs(playlist_id);
+CREATE INDEX IF NOT EXISTS idx_playlist_songs_song ON playlist_songs(song_id);
 CREATE INDEX IF NOT EXISTS idx_history_user ON listening_history(user_id);
+CREATE INDEX IF NOT EXISTS idx_history_user_played ON listening_history(user_id, played_at DESC);
 CREATE INDEX IF NOT EXISTS idx_playlists_user ON playlists(user_id);
+CREATE INDEX IF NOT EXISTS idx_playlists_user_created ON playlists(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_moods_user ON moods(user_id);
+CREATE INDEX IF NOT EXISTS idx_moods_created ON moods(created_at DESC, id DESC);
 `;
 
 const MIGRATE_CATALOG_REMOVAL = `
@@ -85,6 +92,7 @@ export const getDb = (): Database.Database => {
   db = new Database(env.dbPath);
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
+  db.pragma("synchronous = NORMAL");
   db.exec(SCHEMA);
 
   const version: number = (db.pragma("user_version", { simple: true }) as number) || 0;
@@ -105,9 +113,44 @@ export const initDb = (): Database.Database => {
   return database;
 };
 
+export const validateDb = (): boolean => {
+  try {
+    const database = getDb();
+    const tables = database
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+      .all() as { name: string }[];
+    const requiredTables = ["users", "playlists", "playlist_songs", "likes", "listening_history", "moods"];
+    const tableNames = tables.map((t) => t.name);
+    for (const required of requiredTables) {
+      if (!tableNames.includes(required)) {
+        logger.error("database.validation.missing_table", { table: required });
+        return false;
+      }
+    }
+    return true;
+  } catch (err) {
+    logger.error("database.validation.failed", {
+      error: err instanceof Error ? err.message : "unknown",
+    });
+    return false;
+  }
+};
+
+export const runInTransaction = <T>(fn: () => T): T => {
+  const database = getDb();
+  const transaction = database.transaction(fn);
+  return transaction();
+};
+
 export const closeDb = (): void => {
   if (db) {
-    db.close();
+    try {
+      db.close();
+    } catch (err) {
+      logger.error("database.close.failed", {
+        error: err instanceof Error ? err.message : "unknown",
+      });
+    }
     db = null;
   }
 };
