@@ -62,6 +62,21 @@ CREATE TABLE IF NOT EXISTS moods (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS banners (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  type TEXT NOT NULL CHECK (type IN ('featured', 'inline')),
+  title TEXT NOT NULL,
+  subtitle TEXT,
+  action_type TEXT NOT NULL DEFAULT 'none' CHECK (action_type IN ('screen', 'url', 'none')),
+  action_target TEXT,
+  image_key TEXT,
+  image_url TEXT,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  position INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_likes_user ON likes(user_id);
 CREATE INDEX IF NOT EXISTS idx_likes_song ON likes(song_id);
@@ -75,6 +90,7 @@ CREATE INDEX IF NOT EXISTS idx_playlists_user_created ON playlists(user_id, crea
 CREATE INDEX IF NOT EXISTS idx_moods_user ON moods(user_id);
 CREATE INDEX IF NOT EXISTS idx_moods_created ON moods(created_at DESC, id DESC);
 CREATE INDEX IF NOT EXISTS idx_history_song ON listening_history(song_id);
+CREATE INDEX IF NOT EXISTS idx_banners_type_enabled ON banners(type, enabled, position);
 `;
 
 interface Migration {
@@ -84,6 +100,30 @@ interface Migration {
 }
 
 const MIGRATIONS: Migration[] = [
+  {
+    version: 4,
+    name: "add-banners",
+    up: (database) => {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS banners (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          type TEXT NOT NULL CHECK (type IN ('featured', 'inline')),
+          title TEXT NOT NULL,
+          subtitle TEXT,
+          action_type TEXT NOT NULL DEFAULT 'none' CHECK (action_type IN ('screen', 'url', 'none')),
+          action_target TEXT,
+          image_key TEXT,
+          image_url TEXT,
+          enabled INTEGER NOT NULL DEFAULT 1,
+          position INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_banners_type_enabled ON banners(type, enabled, position);
+      `);
+      database.pragma("user_version = 4");
+    },
+  },
   {
     version: 2,
     name: "migrate-catalog-removal",

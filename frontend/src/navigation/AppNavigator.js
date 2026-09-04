@@ -56,6 +56,12 @@ const AppNavigator = () => {
     setMenuSong(null);
   };
 
+  const handleBannerScreen = (target) => {
+    const map = { home: 'Home', search: 'Search', library: 'Library', mood: 'Mood' };
+    const tab = map[target];
+    if (tab) setActiveTab(tab);
+  };
+
   if (onboarding === 'loading') {
     return (
       <View style={styles.splash}>
@@ -74,7 +80,11 @@ const AppNavigator = () => {
         />
       )}
       {activeTab === 'Search' && (
-        <SearchScreen openMenu={openMenu} onOpenAuth={() => setProfileVisible(true)} />
+        <SearchScreen
+          openMenu={openMenu}
+          onOpenAuth={() => setProfileVisible(true)}
+          onOpenScreen={handleBannerScreen}
+        />
       )}
       {activeTab === 'Library' && (
         <LibraryScreen openMenu={openMenu} onOpenAuth={() => setProfileVisible(true)} />

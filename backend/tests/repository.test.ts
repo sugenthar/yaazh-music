@@ -9,6 +9,7 @@ let likes: any;
 let playlists: any;
 let history: any;
 let userRepository: any;
+let banners: any;
 
 beforeAll(async () => {
   dbPath = path.join(os.tmpdir(), `yaazh-repo-${Date.now()}.db`);
@@ -20,6 +21,7 @@ beforeAll(async () => {
   likes = repo.likes;
   playlists = repo.playlists;
   history = repo.history;
+  banners = repo.banners;
 });
 
 afterAll(async () => {
@@ -115,6 +117,36 @@ describe("repository layer", () => {
       const deleted = history.clear(userId);
       expect(deleted).toBeGreaterThanOrEqual(1);
       expect(history.list(userId, 10)).toHaveLength(0);
+    });
+  });
+
+  describe("bannerRepository", () => {
+    it("seeds a featured banner on registration", () => {
+      const featured = banners.listByType("featured");
+      expect(featured.length).toBeGreaterThanOrEqual(1);
+      expect(featured[0].imageKey).toBe("yaazh_music_banner");
+      expect(featured[0].action.type).toBe("screen");
+      expect(featured[0].action.target).toBe("search");
+    });
+
+    it("seeds inline banners and lists them by type", () => {
+      banners.seed({
+        type: "inline",
+        title: "Test inline",
+        imageKey: "test_inline",
+      });
+      const inline = banners.listByType("inline");
+      expect(inline.some((b: { imageKey: string }) => b.imageKey === "test_inline")).toBe(true);
+    });
+
+    it("does not duplicate seeds with the same image key", () => {
+      const before = banners.count();
+      banners.seed({
+        type: "featured",
+        title: "Welcome to Yaazh Music",
+        imageKey: "yaazh_music_banner",
+      });
+      expect(banners.count()).toBe(before);
     });
   });
 

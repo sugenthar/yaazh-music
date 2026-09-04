@@ -592,6 +592,27 @@ describe("Moods", () => {
   });
 });
 
+describe("Banners", () => {
+  it("returns the seeded featured banner", async () => {
+    const res = await request(app).get("/api/banners/featured").expect(200);
+    expect(res.body.success).toBe(true);
+    expect(Array.isArray(res.body.data.banners)).toBe(true);
+    const featured = res.body.data.banners.find(
+      (b: { imageKey: string }) => b.imageKey === "yaazh_music_banner"
+    );
+    expect(featured).toBeDefined();
+    expect(featured.title).toBe("Welcome to Yaazh Music");
+    expect(featured.action.type).toBe("screen");
+    expect(featured.action.target).toBe("search");
+  });
+
+  it("returns an empty inline banner list", async () => {
+    const res = await request(app).get("/api/banners/inline").expect(200);
+    expect(res.body.success).toBe(true);
+    expect(Array.isArray(res.body.data.banners)).toBe(true);
+  });
+});
+
 describe("Error handling", () => {
   it("returns standard error shape for unknown routes", async () => {
     const res = await request(app).get("/api/does-not-exist").expect(404);

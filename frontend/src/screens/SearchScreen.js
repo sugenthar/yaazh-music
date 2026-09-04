@@ -16,6 +16,9 @@ import { searchSongs as fetchRemoteSongs, MAX_LIMIT, toUserMessage } from '../se
 import { normalizeError } from '../services/api';
 import { colors, typography, radius, spacing } from '../theme';
 import { STRINGS } from '../constants/strings';
+import { useInlineBanners } from '../components/banners/useBanners';
+import { buildDisplayList, itemKey, getBanner } from '../components/banners/inlinePosition';
+import InlineBanner from '../components/banners/InlineBanner';
 
 const CATEGORIES = [
   { id: '1', title: 'Tamil Classics', artwork: 'https://upload.wikimedia.org/wikipedia/en/3/30/Jailer_2023_Tamil_film_poster.jpg' },
@@ -50,9 +53,11 @@ const distinctArtists = (songs) => {
   return [...map.values()];
 };
 
-const SearchScreen = ({ openMenu, onOpenAuth }) => {
+const SearchScreen = ({ openMenu, onOpenAuth, onOpenScreen }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const { currentSong, isPlaying, playSong } = usePlayer();
+
+  const inlineBanners = useInlineBanners();
 
   const [results, setResults] = useState([]);
   const [artists, setArtists] = useState([]);
@@ -189,6 +194,15 @@ const SearchScreen = ({ openMenu, onOpenAuth }) => {
   const isSearching = searchQuery.trim().length > 0;
   const showEmpty = isSearching && !loading && results.length === 0 && !error;
 
+  const displayed = isSearching ? buildDisplayList(results, inlineBanners) : [];
+
+  const handleBannerScreen = React.useCallback(
+    (target) => {
+      if (typeof onOpenScreen === 'function') onOpenScreen(target);
+    },
+    [onOpenScreen]
+  );
+
   const renderHeader = () => (
     <View style={styles.headerContent}>
       {!isSearching && (
@@ -303,17 +317,23 @@ const SearchScreen = ({ openMenu, onOpenAuth }) => {
     return null;
   };
 
-  const renderItem = ({ item }) => (
-    <View style={styles.rowWrap}>
-      <SongCard
-        variant="row"
-        song={item}
-        isPlaying={currentSong?.id === item.id && isPlaying}
-        onPlay={() => playSong(item)}
-        onMenu={() => openMenu(item)}
-      />
-    </View>
-  );
+  const renderItem = ({ item }) => {
+    const banner = getBanner(item);
+    if (banner) {
+      return <InlineBanner banner={banner} onOpenScreen={handleBannerScreen} />;
+    }
+    return (
+      <View style={styles.rowWrap}>
+        <SongCard
+          variant="row"
+          song={item}
+          isPlaying={currentSong?.id === item.id && isPlaying}
+          onPlay={() => playSong(item)}
+          onMenu={() => openMenu(item)}
+        />
+      </View>
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -351,8 +371,8 @@ const SearchScreen = ({ openMenu, onOpenAuth }) => {
       </View>
 
       <FlatList
-        data={isSearching ? results : []}
-        keyExtractor={(item) => item.id}
+        data={displayed}
+        keyExtractor={itemKey}
         renderItem={renderItem}
         ListHeaderComponent={renderHeader}
         ListFooterComponent={renderFooter}

@@ -1,8 +1,7 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAuth } from '../store/AuthContext';
 import { colors, typography, spacing } from '../theme';
 
 const getGreeting = () => {
@@ -22,8 +21,6 @@ const Header = ({
   children,
 }) => {
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
-  const initial = user?.name ? user.name[0].toUpperCase() : 'Y';
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.lg }]}>
@@ -36,7 +33,11 @@ const Header = ({
           activeOpacity={0.8}
         >
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initial}</Text>
+            <Image
+              source={require('../../assets/yaazh_logo.jpeg')}
+              style={styles.avatarImage}
+              resizeMode="contain"
+            />
           </View>
         </TouchableOpacity>
 
@@ -87,11 +88,11 @@ const styles = StyleSheet.create({
     borderColor: colors.borderStrong,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
-  avatarText: {
-    color: colors.textPrimary,
-    fontSize: typography.sizes.body,
-    fontFamily: typography.fontFamily.semibold,
+  avatarImage: {
+    width: '100%',
+    height: '100%',
   },
   titleWrap: {
     flex: 1,

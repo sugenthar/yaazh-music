@@ -58,3 +58,46 @@ export interface AuthPayload {
   user: PublicUser;
   token: string;
 }
+
+export type BannerType = "featured" | "inline";
+export type BannerActionType = "screen" | "url" | "none";
+
+export interface Banner {
+  id: number;
+  type: BannerType;
+  title: string;
+  subtitle: string | null;
+  action_type: BannerActionType;
+  action_target: string | null;
+  image_key: string | null;
+  image_url: string | null;
+  enabled: number;
+  position: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BannerInput {
+  type: BannerType;
+  title: string;
+  subtitle?: string | null;
+  actionType?: BannerActionType;
+  actionTarget?: string | null;
+  imageKey?: string | null;
+  imageUrl?: string | null;
+  enabled?: number;
+  position?: number;
+}
+
+export interface PublicBanner {
+  id: number;
+  type: BannerType;
+  title: string;
+  subtitle: string | null;
+  action: {
+    type: BannerActionType;
+    target: string | null;
+  };
+  imageKey: string | null;
+  imageUrl: string | null;
+}

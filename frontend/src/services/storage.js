@@ -7,6 +7,7 @@ const STORAGE_KEYS = {
   SHUFFLE: 'yaazh_shuffle',
   AUTH_TOKEN: 'auth_token',
   USER: 'yaazh_user',
+  INLINE_BANNERS: 'yaazh_banners_inline',
 };
 
 class StorageService {
@@ -103,6 +104,29 @@ class StorageService {
 
   async getShuffle() {
     return (await this.get(STORAGE_KEYS.SHUFFLE)) || false;
+  }
+
+  async getCached(key, maxAgeMs) {
+    const entry = await this.get(key);
+    if (!entry || typeof entry !== 'object' || typeof entry.fetchedAt !== 'number') {
+      return null;
+    }
+    if (Date.now() - entry.fetchedAt > maxAgeMs) {
+      return null;
+    }
+    return entry.data;
+  }
+
+  async setCached(key, data) {
+    await this.set(key, { fetchedAt: Date.now(), data });
+  }
+
+  async getInlineBanners(maxAgeMs) {
+    return await this.getCached(STORAGE_KEYS.INLINE_BANNERS, maxAgeMs);
+  }
+
+  async setInlineBanners(data) {
+    await this.setCached(STORAGE_KEYS.INLINE_BANNERS, data);
   }
 }
 
