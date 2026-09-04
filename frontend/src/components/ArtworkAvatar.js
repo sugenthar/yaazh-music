@@ -1,32 +1,22 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Artwork from './Artwork';
-import { colors, typography, radius, shadows } from '../theme';
+import { colors, typography, radius, spacing, shadows } from '../theme';
 
-const SIZE = 96;
-const RING_GAP = 5;
+const SIZE = 88;
 
-/**
- * Circular artist/avatar artwork with a subtle contour ring and label.
- */
 const ArtworkAvatar = ({ uri, label, sublabel, onPress, active = false }) => {
   const content = (
     <View style={styles.column}>
       <View style={[styles.ring, active && styles.ringActive]}>
-        <View style={styles.circle}>
-          <Artwork uri={uri} size={SIZE} shape="circle" overlay={false} ring />
-        </View>
+        <Artwork uri={uri} size={SIZE} shape="circle" />
       </View>
-      {label && (
-        <Text style={styles.label} numberOfLines={1}>
-          {label}
-        </Text>
-      )}
-      {sublabel && (
-        <Text style={styles.sublabel} numberOfLines={1}>
-          {sublabel}
-        </Text>
-      )}
+      {label ? (
+        <Text style={styles.label} numberOfLines={1}>{label}</Text>
+      ) : null}
+      {sublabel ? (
+        <Text style={styles.sublabel} numberOfLines={1}>{sublabel}</Text>
+      ) : null}
     </View>
   );
 
@@ -42,36 +32,32 @@ const ArtworkAvatar = ({ uri, label, sublabel, onPress, active = false }) => {
 const styles = StyleSheet.create({
   column: {
     alignItems: 'center',
-    width: SIZE + RING_GAP * 2,
+    width: SIZE + 20,
   },
   ring: {
-    width: SIZE + RING_GAP * 2,
-    height: SIZE + RING_GAP * 2,
-    borderRadius: (SIZE + RING_GAP * 2) / 2,
-    borderWidth: 1,
+    width: SIZE + 12,
+    height: SIZE + 12,
+    borderRadius: (SIZE + 12) / 2,
+    borderWidth: 1.5,
     borderColor: colors.borderStrong,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 10,
-    ...shadows.soft,
+    marginBottom: spacing.sm,
     backgroundColor: colors.backgroundSecondary,
+    ...shadows.soft,
   },
   ringActive: {
     borderColor: colors.accent,
   },
-  circle: {
-    overflow: 'hidden',
-    borderRadius: SIZE / 2,
-  },
   label: {
     color: colors.textPrimary,
-    fontSize: typography.sizes.sub,
+    fontSize: typography.sizes.bodySmall,
     fontFamily: typography.fontFamily.medium,
     textAlign: 'center',
   },
   sublabel: {
     color: colors.textMuted,
-    fontSize: typography.sizes.caption,
+    fontSize: typography.sizes.micro,
     fontFamily: typography.fontFamily.body,
     textTransform: 'uppercase',
     letterSpacing: typography.letterSpacing.caps,
@@ -80,4 +66,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ArtworkAvatar;
+export default React.memo(ArtworkAvatar);

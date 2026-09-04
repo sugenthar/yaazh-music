@@ -3,11 +3,15 @@ import { View, Text, TouchableOpacity, Modal, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Artwork from './Artwork';
 import ScalePress from './ScalePress';
-import { colors, typography, radius, spacing, shadows } from '../theme';
+import { colors, typography, radius, spacing } from '../theme';
 
-/**
- * Modern song context menu presented as a bottom sheet.
- */
+const ACTIONS = [
+  { key: 'play', icon: 'play-circle-outline', label: 'Play' },
+  { key: 'like', iconOutline: 'heart-outline', iconFilled: 'heart', labelOutline: 'Like', labelFilled: 'Liked' },
+  { key: 'playlist', icon: 'add-circle-outline', label: 'Add to Playlist' },
+  { key: 'share', icon: 'share-social-outline', label: 'Share' },
+];
+
 const ActionMenu = ({ visible, song, isLiked, onClose, onLike, onAddToPlaylist, onShare, onPlay }) => {
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -21,24 +25,20 @@ const ActionMenu = ({ visible, song, isLiked, onClose, onLike, onAddToPlaylist, 
         <View style={styles.sheet} onStartShouldSetResponder={() => true}>
           <View style={styles.handle} />
 
-          {song && (
+          {song ? (
             <>
               <View style={styles.header}>
-                <Artwork uri={song.artwork} size={56} shape="rounded" overlay={false} />
+                <Artwork uri={song.artwork} size={52} shape="sm" />
                 <View style={styles.headerText}>
-                  <Text style={styles.title} numberOfLines={1}>
-                    {song.title}
-                  </Text>
-                  <Text style={styles.artist} numberOfLines={1}>
-                    {song.artist}
-                  </Text>
+                  <Text style={styles.title} numberOfLines={1}>{song.title}</Text>
+                  <Text style={styles.artist} numberOfLines={1}>{song.artist}</Text>
                 </View>
               </View>
 
               <View style={styles.actions}>
                 <ScalePress onPress={onPlay} style={styles.itemPress}>
                   <View style={styles.item}>
-                    <Ionicons name="play-circle-outline" size={22} color={colors.accent} />
+                    <Ionicons name="play-circle-outline" size={22} color={colors.textPrimary} />
                     <Text style={styles.itemText}>Play</Text>
                   </View>
                 </ScalePress>
@@ -69,7 +69,7 @@ const ActionMenu = ({ visible, song, isLiked, onClose, onLike, onAddToPlaylist, 
                 </ScalePress>
               </View>
             </>
-          )}
+          ) : null}
 
           <TouchableOpacity
             style={styles.cancelBtn}
@@ -100,7 +100,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0,
     padding: spacing.xl,
     paddingBottom: spacing.huge,
-    ...shadows.floating,
   },
   handle: {
     alignSelf: 'center',
@@ -125,11 +124,11 @@ const styles = StyleSheet.create({
   title: {
     color: colors.textPrimary,
     fontSize: typography.sizes.title,
-    fontFamily: typography.fontFamily.display,
+    fontFamily: typography.fontFamily.semibold,
   },
   artist: {
     color: colors.textSecondary,
-    fontSize: typography.sizes.sub,
+    fontSize: typography.sizes.bodySmall,
     fontFamily: typography.fontFamily.body,
     marginTop: 4,
   },
@@ -154,7 +153,7 @@ const styles = StyleSheet.create({
   cancelBtn: {
     marginTop: spacing.sm,
     minHeight: 48,
-    borderRadius: radius.pill,
+    borderRadius: 999,
     backgroundColor: colors.card,
     borderWidth: 1,
     borderColor: colors.border,
@@ -168,4 +167,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ActionMenu;
+export default React.memo(ActionMenu);

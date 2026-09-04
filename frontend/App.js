@@ -17,8 +17,6 @@ import { LibraryProvider } from './src/store/LibraryContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import { colors } from './src/theme';
 
-console.log('[Yaazh][BOOT] App module evaluated');
-
 LogBox.ignoreLogs(['SafeAreaView has been deprecated']);
 
 export default function App() {
@@ -33,7 +31,7 @@ export default function App() {
   if (!fontsReady) {
     return (
       <View style={styles.splash}>
-        <ActivityIndicator color={colors.accent} />
+        <ActivityIndicator color={colors.textMuted} />
       </View>
     );
   }

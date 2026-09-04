@@ -25,6 +25,7 @@
       "package": "com.yaazh.music",
       "permissions": [
         "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_MEDIA_PLAYBACK",
         "FOREGROUND_SERVICE_AUDIO_PLAYBACK",
         "POST_NOTIFICATIONS",
         "WAKE_LOCK"

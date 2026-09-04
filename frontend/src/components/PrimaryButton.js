@@ -3,9 +3,6 @@ import { Text, ActivityIndicator, StyleSheet, View } from 'react-native';
 import ScalePress from './ScalePress';
 import { colors, typography, radius, spacing } from '../theme';
 
-/**
- * Primary CTA buttons: accent-filled, outline, or ghost.
- */
 const PrimaryButton = ({
   label,
   onPress,
@@ -20,23 +17,20 @@ const PrimaryButton = ({
 }) => {
   const isDisabled = disabled || loading;
 
-  const bg =
-    variant === 'ghost' ? 'transparent' : variant === 'secondary' ? 'transparent' : colors.accent;
-
   return (
     <ScalePress onPress={onPress} disabled={isDisabled} style={[fullWidth && styles.fullWidth, style]} accessibilityLabel={accessibilityLabel || label}>
       <View
         style={[
           styles.base,
           compact && styles.compact,
-          bg !== 'transparent' && { backgroundColor: bg },
+          variant === 'primary' && styles.primary,
           variant === 'secondary' && styles.secondary,
           variant === 'ghost' && styles.ghost,
           isDisabled && styles.disabled,
         ]}
       >
         {loading ? (
-          <ActivityIndicator color={variant === 'primary' ? colors.textOnAccent : colors.accent} />
+          <ActivityIndicator color={variant === 'primary' ? colors.textOnAccent : colors.textPrimary} />
         ) : (
           <>
             {icon}
@@ -63,19 +57,22 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
   },
   base: {
-    height: 54,
-    borderRadius: radius.pill,
+    height: 52,
+    borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
     paddingHorizontal: spacing.xxl,
   },
   compact: {
-    height: 42,
+    height: 40,
     paddingHorizontal: spacing.xl,
   },
   compactLabel: {
-    fontSize: typography.sizes.sub,
+    fontSize: typography.sizes.bodySmall,
+  },
+  primary: {
+    backgroundColor: colors.accent,
   },
   primaryLabel: {
     color: colors.textOnAccent,
@@ -83,17 +80,19 @@ const styles = StyleSheet.create({
   secondary: {
     borderWidth: 1,
     borderColor: colors.borderStrong,
-    backgroundColor: 'rgba(43,41,36,0.4)',
+    backgroundColor: colors.card,
   },
   secondaryLabel: {
     color: colors.textPrimary,
   },
-  ghost: {},
+  ghost: {
+    backgroundColor: 'transparent',
+  },
   ghostLabel: {
-    color: colors.accent,
+    color: colors.textPrimary,
   },
   disabled: {
-    opacity: 0.45,
+    opacity: 0.4,
   },
   label: {
     fontSize: typography.sizes.body,
@@ -102,4 +101,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default PrimaryButton;
+export default React.memo(PrimaryButton);

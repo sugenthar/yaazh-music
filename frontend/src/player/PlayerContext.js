@@ -6,6 +6,7 @@ import StorageService from '../services/storage';
 import SongsService from '../services/songs';
 import { useAuth } from '../store/AuthContext';
 import { STRINGS } from '../constants/strings';
+import mediaSession from './MediaSession';
 
 const IS_DEV = typeof __DEV__ !== 'undefined' && __DEV__;
 const logPlayer = (label, ...args) => {
@@ -33,7 +34,8 @@ const toMetadata = (song) =>
     ? {
         title: song.title,
         artist: song.artist,
-        artwork: song.artwork,
+        albumTitle: song.album,
+        artworkUrl: song.artwork,
       }
     : undefined;
 
@@ -68,6 +70,9 @@ export const PlayerProvider = ({ children }) => {
 
   useEffect(() => {
     logPlayer('create');
+    // Point the system media-session adapter at the single audio player so the
+    // OS notification/lock-screen controls mirror exactly this player.
+    mediaSession.setPlayer(player);
     // Required for real Android background playback: keeps the audio session
     // active (foreground media service) so audio survives Home/lock/app switch.
     setAudioModeAsync({
@@ -79,7 +84,10 @@ export const PlayerProvider = ({ children }) => {
     })
       .then(() => logPlayer('audioMode', 'shouldPlayInBackground=true'))
       .catch((e) => logPlayer('audioMode failed', e));
-  }, []);
+    return () => {
+      mediaSession.dispose();
+    };
+  }, [player]);
 
   // Lifecycle tracking ONLY for dev logging. Deliberately no pause()/play() —
   // the audio engine keeps the source of truth while backgrounded.
@@ -228,6 +236,29 @@ export const PlayerProvider = ({ children }) => {
       StorageService.setCurrentSong(currentSong);
     }
   }, [currentSong]);
+
+  // System media notification: reflect the active song on the lock screen /
+  // notification. Runs whenever the current song changes (next/previous/queue
+  // selection/auto-completion/home/search/library/mood) so metadata always
+  // tracks the actual playing track. Clears the session when there is no song.
+  useEffect(() => {
+    if (currentSong) {
+      mediaSession.sync({ song: currentSong, isPlaying });
+    } else {
+      mediaSession.clear();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentSong]);
+
+  // Keep the OS play/pause state and now-playing clock fresh on discrete
+  // play/pause transitions. The adapter throttles actual native writes to
+  // song changes, so this does not spam the system while a track plays.
+  useEffect(() => {
+    if (currentSong) {
+      mediaSession.sync({ song: currentSong, isPlaying, forceMetadata: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPlaying, currentSong?.id]);
 
   // Shared load path used by user actions only. Sets the pending token so the
   // track plays exactly once when the engine reports isLoaded. A user action

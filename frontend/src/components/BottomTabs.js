@@ -2,7 +2,7 @@ import React from 'react';
 import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, typography, radius, shadows } from '../theme';
+import { colors, typography, radius, spacing } from '../theme';
 
 const TABS = [
   { key: 'Home', label: 'Home', icon: 'home-outline', activeIcon: 'home' },
@@ -11,14 +11,11 @@ const TABS = [
   { key: 'Mood', label: 'Mood', icon: 'sparkles-outline', activeIcon: 'sparkles' },
 ];
 
-/**
- * Minimal floating navigation bar with thin active indicator.
- */
 const BottomTabs = ({ activeTab, onTabChange }) => {
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={[styles.safeWrap, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+    <View style={[styles.safeWrap, { paddingBottom: Math.max(insets.bottom, 8) }]}>
       <View style={styles.bar}>
         {TABS.map((tab) => {
           const isActive = activeTab === tab.key;
@@ -32,7 +29,6 @@ const BottomTabs = ({ activeTab, onTabChange }) => {
               accessibilityState={{ selected: isActive }}
               accessibilityLabel={tab.label}
             >
-              <View style={[styles.indicator, isActive && styles.indicatorActive]} />
               <Ionicons
                 name={isActive ? tab.activeIcon : tab.icon}
                 size={22}
@@ -53,36 +49,22 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(25,24,21,0.92)',
-    paddingHorizontal: 14,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    backgroundColor: 'rgba(5,5,5,0.94)',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
   },
   bar: {
     flexDirection: 'row',
-    backgroundColor: colors.backgroundSecondary,
+    backgroundColor: colors.card,
     borderRadius: radius.xl,
     borderWidth: 1,
     borderColor: colors.border,
-    paddingVertical: 6,
-    ...shadows.floating,
+    paddingVertical: spacing.xs,
   },
   tab: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 8,
-  },
-  indicator: {
-    position: 'absolute',
-    top: -2,
-    width: 24,
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: 'transparent',
-  },
-  indicatorActive: {
-    backgroundColor: colors.accent,
+    paddingVertical: spacing.sm,
   },
   label: {
     color: colors.textMuted,
@@ -97,4 +79,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default BottomTabs;
+export default React.memo(BottomTabs);

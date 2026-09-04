@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../store/AuthContext';
 import { usePlayer } from '../player/PlayerContext';
 import { useLibrary } from '../store/LibraryContext';
-import { colors, typography, radius, spacing, shadows } from '../theme';
+import { colors, typography, radius, spacing } from '../theme';
 
 const ProfileSheet = ({ visible, onClose, onNavigateAuth }) => {
   const { user, logout } = useAuth();
@@ -27,12 +27,8 @@ const ProfileSheet = ({ visible, onClose, onNavigateAuth }) => {
               <Text style={styles.avatarText}>{user?.name?.[0]?.toUpperCase() || 'Y'}</Text>
             </View>
             <View style={styles.identityText}>
-              <Text style={styles.name} numberOfLines={1}>
-                {user?.name || 'Guest listener'}
-              </Text>
-              <Text style={styles.email} numberOfLines={1}>
-                {user?.email || 'Sign in to sync your library'}
-              </Text>
+              <Text style={styles.name} numberOfLines={1}>{user?.name || 'Guest listener'}</Text>
+              <Text style={styles.email} numberOfLines={1}>{user?.email || 'Sign in to sync your library'}</Text>
             </View>
           </View>
 
@@ -48,7 +44,7 @@ const ProfileSheet = ({ visible, onClose, onNavigateAuth }) => {
             </View>
             <View style={styles.statDivider} />
             <View style={styles.stat}>
-              <Text style={styles.statValue}>{currentSong ? '♪' : '—'}</Text>
+              <Text style={styles.statValue}>{currentSong ? '\u266A' : '\u2014'}</Text>
               <Text style={styles.statLabel}>NOW PLAYING</Text>
             </View>
           </View>
@@ -62,11 +58,11 @@ const ProfileSheet = ({ visible, onClose, onNavigateAuth }) => {
             ) : (
               <>
                 <TouchableOpacity style={styles.action} onPress={() => { onClose(); onNavigateAuth('login'); }} accessibilityRole="button" accessibilityLabel="Log in">
-                  <Ionicons name="log-in-outline" size={20} color={colors.accent} />
+                  <Ionicons name="log-in-outline" size={20} color={colors.textPrimary} />
                   <Text style={styles.actionText}>Log In</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.action} onPress={() => { onClose(); onNavigateAuth('signup'); }} accessibilityRole="button" accessibilityLabel="Sign up">
-                  <Ionicons name="person-add-outline" size={20} color={colors.accent} />
+                  <Ionicons name="person-add-outline" size={20} color={colors.textPrimary} />
                   <Text style={styles.actionText}>Sign Up</Text>
                 </TouchableOpacity>
               </>
@@ -97,7 +93,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0,
     padding: spacing.xl,
     paddingBottom: spacing.huge,
-    ...shadows.floating,
   },
   handle: {
     alignSelf: 'center',
@@ -112,9 +107,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     backgroundColor: colors.elevated,
     borderWidth: 1,
     borderColor: colors.borderStrong,
@@ -123,7 +118,7 @@ const styles = StyleSheet.create({
     marginRight: spacing.lg,
   },
   avatarText: {
-    color: colors.accent,
+    color: colors.textPrimary,
     fontSize: typography.sizes.title,
     fontFamily: typography.fontFamily.semibold,
   },
@@ -133,11 +128,11 @@ const styles = StyleSheet.create({
   name: {
     color: colors.textPrimary,
     fontSize: typography.sizes.title,
-    fontFamily: typography.fontFamily.display,
+    fontFamily: typography.fontFamily.semibold,
   },
   email: {
     color: colors.textMuted,
-    fontSize: typography.sizes.sub,
+    fontSize: typography.sizes.bodySmall,
     fontFamily: typography.fontFamily.body,
     marginTop: 2,
   },
@@ -148,6 +143,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderRadius: radius.md,
     paddingVertical: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   stat: {
     flex: 1,
@@ -160,8 +157,8 @@ const styles = StyleSheet.create({
   },
   statValue: {
     color: colors.textPrimary,
-    fontSize: typography.sizes.section,
-    fontFamily: typography.fontFamily.display,
+    fontSize: typography.sizes.subtitle,
+    fontFamily: typography.fontFamily.semibold,
   },
   statLabel: {
     color: colors.textMuted,
@@ -189,4 +186,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ProfileSheet;
+export default React.memo(ProfileSheet);

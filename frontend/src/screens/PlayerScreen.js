@@ -10,7 +10,6 @@ import {
   Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePlayer } from '../player/PlayerContext';
 import { useLibrary } from '../store/LibraryContext';
@@ -46,7 +45,7 @@ const PlayerScreen = ({ activeTab, visible = true, onClose, onOpenMenu }) => {
 
   const { likedSongs, toggleLike } = useLibrary();
   const { songs } = useMusic();
-  const [sheet, setSheet] = useState(null); // null | 'lyrics' | 'queue'
+  const [sheet, setSheet] = useState(null);
 
   const scale = useRef(new Animated.Value(1)).current;
 
@@ -55,7 +54,7 @@ const PlayerScreen = ({ activeTab, visible = true, onClose, onOpenMenu }) => {
     scale.setValue(1);
     if (isPlaying) {
       const loop = Animated.sequence([
-        Animated.timing(scale, { toValue: 1.045, duration: 1200, useNativeDriver: true }),
+        Animated.timing(scale, { toValue: 1.04, duration: 1200, useNativeDriver: true }),
         Animated.timing(scale, { toValue: 1, duration: 1200, useNativeDriver: true }),
       ]);
       Animated.loop(loop).start();
@@ -70,14 +69,11 @@ const PlayerScreen = ({ activeTab, visible = true, onClose, onOpenMenu }) => {
   if (!currentSong) return null;
 
   const isLiked = likedSongs.includes(currentSong.id);
-  const heroSize = Math.min(width - 96, 320);
+  const heroSize = Math.min(width - 80, 320);
 
   return (
     <Modal animationType="slide" transparent={false} visible={visible} onRequestClose={onClose}>
-      <LinearGradient
-        colors={['#2B2924', '#191815', '#11110F']}
-        style={[styles.container, { paddingTop: insets.top + spacing.lg, paddingBottom: insets.bottom + spacing.xl }]}
-      >
+      <View style={[styles.container, { paddingTop: insets.top + spacing.lg, paddingBottom: insets.bottom + spacing.xl, backgroundColor: colors.background }]}>
         <View style={styles.header}>
           <TouchableOpacity
             onPress={onClose}
@@ -89,9 +85,7 @@ const PlayerScreen = ({ activeTab, visible = true, onClose, onOpenMenu }) => {
           </TouchableOpacity>
           <View style={styles.headerCenter}>
             <Text style={styles.headerEyebrow}>{STRINGS.player.nowPlaying}</Text>
-            <Text style={styles.headerLabel} numberOfLines={1}>
-              {activeTab}
-            </Text>
+            <Text style={styles.headerLabel} numberOfLines={1}>{activeTab}</Text>
           </View>
           <TouchableOpacity
             onPress={() => onOpenMenu(currentSong)}
@@ -130,7 +124,7 @@ const PlayerScreen = ({ activeTab, visible = true, onClose, onOpenMenu }) => {
           </View>
         </View>
 
-        {playbackError && (
+        {playbackError ? (
           <View style={styles.errorRow}>
             <Text style={styles.errorText} numberOfLines={2}>{playbackError}</Text>
             <TouchableOpacity
@@ -142,7 +136,7 @@ const PlayerScreen = ({ activeTab, visible = true, onClose, onOpenMenu }) => {
               <Ionicons name="close" size={18} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
-        )}
+        ) : null}
 
         <TouchableOpacity
           activeOpacity={1}
@@ -186,7 +180,7 @@ const PlayerScreen = ({ activeTab, visible = true, onClose, onOpenMenu }) => {
           </TouchableOpacity>
 
           <TouchableOpacity onPress={togglePlay} style={styles.playButton} accessibilityRole="button" accessibilityLabel="Play or pause">
-            <Ionicons name={isPlaying ? 'pause' : 'play'} size={34} color={colors.textOnAccent} />
+            <Ionicons name={isPlaying ? 'pause' : 'play'} size={34} color={colors.textOnAccent} style={!isPlaying ? { marginLeft: 3 } : undefined} />
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -232,7 +226,7 @@ const PlayerScreen = ({ activeTab, visible = true, onClose, onOpenMenu }) => {
           </TouchableOpacity>
         </View>
 
-        {sheet === 'lyrics' && (
+        {sheet === 'lyrics' ? (
           <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing.xxl }]}>
             <View style={styles.sheetHandle} />
             <Text style={styles.sheetTitle}>{STRINGS.player.lyrics}</Text>
@@ -242,9 +236,9 @@ const PlayerScreen = ({ activeTab, visible = true, onClose, onOpenMenu }) => {
               <Text style={styles.sheetBodyText}>{STRINGS.player.lyricsUnavailable}</Text>
             </View>
           </View>
-        )}
+        ) : null}
 
-        {sheet === 'queue' && (
+        {sheet === 'queue' ? (
           <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing.xxl }]}>
             <View style={styles.sheetHandle} />
             <Text style={styles.sheetTitle}>{STRINGS.player.queue}</Text>
@@ -267,7 +261,7 @@ const PlayerScreen = ({ activeTab, visible = true, onClose, onOpenMenu }) => {
                         {item.title}
                       </Text>
                       <Text style={styles.queueArtist} numberOfLines={1}>{item.artist}</Text>
-                      {active && <Ionicons name="volume-high" size={14} color={colors.accent} />}
+                      {active ? <Ionicons name="volume-high" size={14} color={colors.accent} /> : null}
                     </TouchableOpacity>
                   );
                 }}
@@ -279,8 +273,8 @@ const PlayerScreen = ({ activeTab, visible = true, onClose, onOpenMenu }) => {
               </View>
             )}
           </View>
-        )}
-      </LinearGradient>
+        ) : null}
+      </View>
     </Modal>
   );
 };
@@ -299,14 +293,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerEyebrow: {
-    color: colors.accent,
+    color: colors.textMuted,
     fontSize: typography.sizes.micro,
     fontFamily: typography.fontFamily.semibold,
     letterSpacing: typography.letterSpacing.caps,
   },
   headerLabel: {
     color: colors.textSecondary,
-    fontSize: typography.sizes.sub,
+    fontSize: typography.sizes.bodySmall,
     fontFamily: typography.fontFamily.body,
     marginTop: 2,
   },
@@ -329,13 +323,13 @@ const styles = StyleSheet.create({
   },
   songTitle: {
     color: colors.textPrimary,
-    fontSize: typography.sizes.large,
-    fontFamily: typography.fontFamily.display,
+    fontSize: typography.sizes.titleLarge,
+    fontFamily: typography.fontFamily.semibold,
     letterSpacing: typography.letterSpacing.tight,
   },
   songArtist: {
     color: colors.textSecondary,
-    fontSize: typography.sizes.sub,
+    fontSize: typography.sizes.bodySmall,
     fontFamily: typography.fontFamily.body,
     marginTop: 4,
   },
@@ -343,7 +337,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.backgroundSecondary,
+    backgroundColor: colors.elevated,
     borderWidth: 1,
     borderColor: colors.border,
     alignItems: 'center',
@@ -353,7 +347,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.backgroundSecondary,
+    backgroundColor: colors.elevated,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.lg,
@@ -415,8 +409,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    borderRadius: radius.pill,
-    backgroundColor: colors.backgroundSecondary,
+    borderRadius: 999,
+    backgroundColor: colors.elevated,
     borderWidth: 1,
     borderColor: colors.border,
     marginHorizontal: spacing.sm,
@@ -427,7 +421,7 @@ const styles = StyleSheet.create({
   },
   sheetBtnText: {
     color: colors.textSecondary,
-    fontSize: typography.sizes.sub,
+    fontSize: typography.sizes.bodySmall,
     fontFamily: typography.fontFamily.medium,
     marginLeft: spacing.xs,
   },
@@ -459,7 +453,7 @@ const styles = StyleSheet.create({
   sheetTitle: {
     color: colors.textPrimary,
     fontSize: typography.sizes.title,
-    fontFamily: typography.fontFamily.display,
+    fontFamily: typography.fontFamily.semibold,
     marginBottom: spacing.md,
   },
   sheetBody: {
@@ -474,11 +468,11 @@ const styles = StyleSheet.create({
   },
   sheetBodyText: {
     color: colors.textMuted,
-    fontSize: typography.sizes.sub,
+    fontSize: typography.sizes.bodySmall,
     fontFamily: typography.fontFamily.body,
     textAlign: 'center',
     marginTop: spacing.sm,
-    lineHeight: typography.lineHeights.sub,
+    lineHeight: typography.lineHeights.bodySmall,
   },
   queueList: {
     flexGrow: 0,

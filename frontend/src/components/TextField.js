@@ -15,10 +15,6 @@ const AUTOCOMPLETE_MAP = {
 
 const mapAutoComplete = (type) => (type ? AUTOCOMPLETE_MAP[type] || 'off' : undefined);
 
-/**
- * Beautiful input field with label, optional icon, password visibility toggle,
- * error state and keyboard-safe behavior.
- */
 const TextField = ({
   label,
   value,
@@ -36,14 +32,21 @@ const TextField = ({
   textContentType,
 }) => {
   const [showPassword, setShowPassword] = useState(false);
+  const [focused, setFocused] = useState(false);
   const isPassword = secureTextEntry;
   const isError = !!error;
 
   return (
     <View style={styles.field}>
       {label ? <Text style={styles.label}>{label}</Text> : null}
-      <View style={[styles.inputWrap, isError && styles.inputWrapError]}>
-        {icon && <View style={styles.iconWrap}>{icon}</View>}
+      <View
+        style={[
+          styles.inputWrap,
+          isError && styles.inputWrapError,
+          focused && !isError && styles.inputWrapFocused,
+        ]}
+      >
+        {icon ? <View style={styles.iconWrap}>{icon}</View> : null}
         <TextInput
           style={[styles.input, icon && styles.inputWithIcon, multiline && styles.multiline]}
           value={value}
@@ -60,8 +63,10 @@ const TextField = ({
           textContentType={textContentType}
           accessibilityLabel={label || placeholder}
           autoComplete={mapAutoComplete(textContentType)}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
         />
-        {isPassword && (
+        {isPassword ? (
           <TouchableOpacity
             onPress={() => setShowPassword((v) => !v)}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -74,7 +79,7 @@ const TextField = ({
               color={colors.textMuted}
             />
           </TouchableOpacity>
-        )}
+        ) : null}
       </View>
       {isError ? <Text style={styles.error}>{error}</Text> : null}
     </View>
@@ -87,7 +92,7 @@ const styles = StyleSheet.create({
   },
   label: {
     color: colors.textSecondary,
-    fontSize: typography.sizes.sub,
+    fontSize: typography.sizes.bodySmall,
     fontFamily: typography.fontFamily.medium,
     marginBottom: spacing.sm,
     letterSpacing: typography.letterSpacing.wide,
@@ -95,7 +100,7 @@ const styles = StyleSheet.create({
   inputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 54,
+    height: 52,
     borderRadius: radius.md,
     backgroundColor: colors.card,
     borderWidth: 1,
@@ -104,6 +109,9 @@ const styles = StyleSheet.create({
   },
   inputWrapError: {
     borderColor: colors.error,
+  },
+  inputWrapFocused: {
+    borderColor: colors.borderFocus,
   },
   iconWrap: {
     marginRight: spacing.md,
@@ -130,4 +138,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default TextField;
+export default React.memo(TextField);

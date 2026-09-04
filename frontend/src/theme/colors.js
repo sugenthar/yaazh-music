@@ -1,41 +1,44 @@
 /**
- * Yaazh Music – color system.
- * Warm dark neutrals with a cream accent. No Spotify-green.
+ * Yaazh Music – black & white color system.
+ * Album artwork provides all visual personality.
  */
 export const colors = {
   // Base surfaces
-  background: '#11110F',
-  backgroundSecondary: '#191815',
-  card: '#24221E',
-  elevated: '#2B2924',
+  background: '#050505',
+  backgroundSecondary: '#0A0A0A',
+  card: '#111111',
+  elevated: '#181818',
+  pressed: '#222222',
 
   // Text
-  textPrimary: '#F4F0E8',
-  textSecondary: '#A9A39A',
-  textMuted: '#777168',
-  textOnAccent: '#161512',
+  textPrimary: '#FFFFFF',
+  textSecondary: '#B3B3B3',
+  textMuted: '#777777',
+  textOnAccent: '#000000',
 
-  // Accent (warm cream)
-  accent: '#D8C5A8',
-  accentHighlight: '#E5D5BA',
-  accentDeep: '#C3AE8F',
+  // Accent (pure white for premium feel)
+  accent: '#FFFFFF',
+  accentHighlight: '#F0F0F0',
+  accentDeep: '#CCCCCC',
 
   // Borders
-  border: 'rgba(216,197,168,0.14)',
-  borderStrong: 'rgba(216,197,168,0.28)',
+  border: 'rgba(255,255,255,0.08)',
+  borderStrong: 'rgba(255,255,255,0.16)',
+  borderFocus: 'rgba(255,255,255,0.30)',
 
   // Status
-  error: '#C96A4B',
-  success: '#9FB98F',
-  info: '#A9A39A',
+  error: '#FF4444',
+  success: '#44CC66',
+  info: '#B3B3B3',
 
   // Overlays
-  overlay: 'rgba(17,17,15,0.72)',
-  overlayLight: 'rgba(43,41,36,0.6)',
+  overlay: 'rgba(0,0,0,0.72)',
+  overlayLight: 'rgba(0,0,0,0.50)',
 
-  // Decorative warm tints used in gradients / organic wrappers
-  warmGlow: 'rgba(216,197,168,0.08)',
-  warmGlowStrong: 'rgba(216,197,168,0.16)',
+  // Decorative (grayscale only)
+  shimmer: 'rgba(255,255,255,0.04)',
+  skeleton: '#181818',
+  skeletonHighlight: '#222222',
 };
 
 export default colors;

@@ -6,16 +6,11 @@ import ArtworkCard from './ArtworkCard';
 import ScalePress from './ScalePress';
 import { colors, typography, radius, spacing } from '../theme';
 
-/**
- * Song presentation. `row` for lists, `card` for horizontal shelves,
- * `genre` for editorial category tiles.
- */
 const SongCard = ({ song, variant = 'row', isPlaying, onPlay, onMenu }) => {
-
   if (variant === 'genre') {
     return (
       <ScalePress onPress={onPlay} style={styles.genreCard}>
-        <Artwork uri={song.artwork} size={genreSize} shape="blob" overlay />
+        <Artwork uri={song.artwork} size={160} shape="rounded" />
         <View style={styles.genreOverlay}>
           <Text style={styles.genreTitle}>{song.title}</Text>
           <Text style={styles.genreMeta}>EXPLORE</Text>
@@ -32,23 +27,25 @@ const SongCard = ({ song, variant = 'row', isPlaying, onPlay, onMenu }) => {
     <View style={styles.row}>
       <ScalePress onPress={onPlay} style={styles.rowPress}>
         <View style={styles.rowInner}>
-          <Artwork uri={song.artwork} size={52} shape="rounded" overlay={false} />
+          <Artwork uri={song.artwork} size={48} shape="sm" />
           <View style={styles.rowInfo}>
             <Text style={[styles.rowTitle, isPlaying && styles.rowTitleActive]} numberOfLines={1}>
               {song.title}
             </Text>
-            <Text style={styles.rowArtist} numberOfLines={1}>
-              {song.artist}
-            </Text>
+            <Text style={styles.rowArtist} numberOfLines={1}>{song.artist}</Text>
           </View>
-          {onPlay && (
-            <View style={styles.rowPlay}>
-              <Ionicons name={isPlaying ? 'pause' : 'play'} size={16} color={colors.textOnAccent} />
+          {isPlaying ? (
+            <View style={styles.nowPlaying}>
+              <Ionicons name="volume-high" size={14} color={colors.accent} />
             </View>
-          )}
+          ) : onPlay ? (
+            <View style={styles.playIndicator}>
+              <Ionicons name="play" size={14} color={colors.textMuted} />
+            </View>
+          ) : null}
         </View>
       </ScalePress>
-      {onMenu && (
+      {onMenu ? (
         <TouchableOpacity
           onPress={onMenu}
           style={styles.menuBtn}
@@ -58,12 +55,10 @@ const SongCard = ({ song, variant = 'row', isPlaying, onPlay, onMenu }) => {
         >
           <Ionicons name="ellipsis-horizontal" size={18} color={colors.textMuted} />
         </TouchableOpacity>
-      )}
+      ) : null}
     </View>
   );
 };
-
-const genreSize = 160;
 
 const styles = StyleSheet.create({
   genreCard: {
@@ -83,12 +78,11 @@ const styles = StyleSheet.create({
   },
   genreTitle: {
     color: colors.textPrimary,
-    fontSize: typography.sizes.section,
-    fontFamily: typography.fontFamily.display,
-    letterSpacing: typography.letterSpacing.tight,
+    fontSize: typography.sizes.subtitle,
+    fontFamily: typography.fontFamily.semibold,
   },
   genreMeta: {
-    color: colors.accent,
+    color: colors.textMuted,
     fontSize: typography.sizes.micro,
     fontFamily: typography.fontFamily.semibold,
     letterSpacing: typography.letterSpacing.caps,
@@ -97,7 +91,8 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.md,
+    marginBottom: spacing.xs,
+    minHeight: 56,
   },
   rowPress: {
     flex: 1,
@@ -121,15 +116,18 @@ const styles = StyleSheet.create({
   },
   rowArtist: {
     color: colors.textMuted,
-    fontSize: typography.sizes.sub,
+    fontSize: typography.sizes.bodySmall,
     fontFamily: typography.fontFamily.body,
     marginTop: 2,
   },
-  rowPlay: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: colors.accent,
+  nowPlaying: {
+    marginLeft: spacing.md,
+  },
+  playIndicator: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.elevated,
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: spacing.md,
@@ -140,4 +138,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default SongCard;
+export default React.memo(SongCard);

@@ -1,26 +1,26 @@
 /**
  * Yaazh Music – shadow system.
- * Soft, subtle elevation. No neon / heavy shadows.
+ * Minimal shadows. Prefer surface contrast for hierarchy.
  */
 export const shadows = {
   soft: {
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.18,
-    shadowRadius: 12,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.20,
+    shadowRadius: 8,
+    elevation: 2,
   },
   medium: {
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.24,
-    shadowRadius: 18,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.30,
+    shadowRadius: 14,
+    elevation: 5,
   },
   floating: {
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.32,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.40,
     shadowRadius: 24,
     elevation: 10,
   },

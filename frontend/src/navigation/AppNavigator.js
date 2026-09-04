@@ -24,8 +24,8 @@ const ONBOARDING_SEEN_KEY = 'yaazh_onboarding_seen';
 
 const AppNavigator = () => {
   const [activeTab, setActiveTab] = useState('Home');
-  const [onboarding, setOnboarding] = useState('loading'); // 'loading' | 'show' | 'hidden'
-  const [authRoute, setAuthRoute] = useState(null); // null | 'login' | 'signup'
+  const [onboarding, setOnboarding] = useState('loading');
+  const [authRoute, setAuthRoute] = useState(null);
   const [isPlayerMaximized, setPlayerMaximized] = useState(false);
   const [menuSong, setMenuSong] = useState(null);
   const [isMenuVisible, setMenuVisible] = useState(false);
@@ -59,7 +59,7 @@ const AppNavigator = () => {
   if (onboarding === 'loading') {
     return (
       <View style={styles.splash}>
-        <Text style={styles.splashBrand}>YAழH MUSIC</Text>
+        <Text style={styles.splashBrand}>YAAZH MUSIC</Text>
       </View>
     );
   }
@@ -94,7 +94,7 @@ const AppNavigator = () => {
         onClose={() => setPlaylistPickerVisible(false)}
       />
 
-      {currentSong && (
+      {currentSong ? (
         <BottomPlayer
           song={currentSong}
           isPlaying={isPlaying}
@@ -104,7 +104,7 @@ const AppNavigator = () => {
           progress={progress}
           onPress={() => setPlayerMaximized(true)}
         />
-      )}
+      ) : null}
 
       <BottomTabs activeTab={activeTab} onTabChange={setActiveTab} />
 
@@ -125,7 +125,7 @@ const AppNavigator = () => {
         onNavigateAuth={setAuthRoute}
       />
 
-      {onboarding === 'show' && (
+      {onboarding === 'show' ? (
         <View style={styles.onboardingOverlay}>
           <OnboardingScreen
             onSkip={completeOnboarding}
@@ -133,7 +133,7 @@ const AppNavigator = () => {
             onLogin={() => { completeOnboarding(); setAuthRoute('login'); }}
           />
         </View>
-      )}
+      ) : null}
 
       <LoginScreen
         visible={authRoute === 'login'}
@@ -164,10 +164,10 @@ const styles = StyleSheet.create({
     padding: spacing.xxl,
   },
   splashBrand: {
-    color: colors.accent,
-    fontSize: typography.sizes.large,
-    fontFamily: typography.fontFamily.display,
-    letterSpacing: typography.letterSpacing.wide,
+    color: colors.textPrimary,
+    fontSize: typography.sizes.titleLarge,
+    fontFamily: typography.fontFamily.semibold,
+    letterSpacing: typography.letterSpacing.caps,
   },
   onboardingOverlay: {
     ...StyleSheet.absoluteFillObject,

@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLibrary } from '../store/LibraryContext';
-import { colors, typography, radius, spacing, shadows } from '../theme';
+import { colors, typography, radius, spacing } from '../theme';
 
 const PlaylistPicker = ({ visible = false, song, onClose }) => {
   const { playlists, createPlaylist, addSongToPlaylist } = useLibrary();
@@ -62,7 +62,7 @@ const PlaylistPicker = ({ visible = false, song, onClose }) => {
             </TouchableOpacity>
           </View>
 
-          {notice && <Text style={styles.notice}>{notice}</Text>}
+          {notice ? <Text style={styles.notice}>{notice}</Text> : null}
 
           {creating ? (
             <View style={styles.createRow}>
@@ -78,7 +78,7 @@ const PlaylistPicker = ({ visible = false, song, onClose }) => {
                 accessibilityLabel="New playlist name"
               />
               <TouchableOpacity
-                style={styles.createBtn}
+                style={[styles.createBtn, !newName.trim() && styles.createBtnDisabled]}
                 onPress={handleCreate}
                 disabled={!newName.trim()}
                 accessibilityRole="button"
@@ -95,7 +95,7 @@ const PlaylistPicker = ({ visible = false, song, onClose }) => {
               accessibilityLabel="New playlist"
             >
               <View style={styles.createPlaylistIcon}>
-                <Ionicons name="add" size={24} color={colors.accent} />
+                <Ionicons name="add" size={22} color={colors.textPrimary} />
               </View>
               <Text style={styles.createPlaylistText}>New playlist</Text>
             </TouchableOpacity>
@@ -107,7 +107,9 @@ const PlaylistPicker = ({ visible = false, song, onClose }) => {
             showsVerticalScrollIndicator={false}
             style={styles.list}
             ListEmptyComponent={
-              !creating ? <Text style={styles.emptyText}>No playlists yet. Create one above.</Text> : null
+              !creating ? (
+                <Text style={styles.emptyText}>No playlists yet. Create one above.</Text>
+              ) : null
             }
             renderItem={({ item }) => (
               <TouchableOpacity
@@ -117,11 +119,9 @@ const PlaylistPicker = ({ visible = false, song, onClose }) => {
                 accessibilityLabel={`Add to ${item.name}`}
               >
                 <View style={styles.playlistIcon}>
-                  <Ionicons name="musical-notes" size={18} color={colors.accent} />
+                  <Ionicons name="musical-notes" size={18} color={colors.textMuted} />
                 </View>
-                <Text style={styles.playlistName} numberOfLines={1}>
-                  {item.name}
-                </Text>
+                <Text style={styles.playlistName} numberOfLines={1}>{item.name}</Text>
                 <Text style={styles.songCount}>{item.songCount ?? 0} songs</Text>
               </TouchableOpacity>
             )}
@@ -148,7 +148,6 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     paddingBottom: spacing.huge,
     maxHeight: '75%',
-    ...shadows.floating,
   },
   handle: {
     alignSelf: 'center',
@@ -165,18 +164,18 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   doneText: {
-    color: colors.accent,
+    color: colors.textPrimary,
     fontSize: typography.sizes.body,
     fontFamily: typography.fontFamily.medium,
   },
   title: {
     color: colors.textPrimary,
     fontSize: typography.sizes.title,
-    fontFamily: typography.fontFamily.display,
+    fontFamily: typography.fontFamily.semibold,
   },
   notice: {
     color: colors.success,
-    fontSize: typography.sizes.sub,
+    fontSize: typography.sizes.bodySmall,
     fontFamily: typography.fontFamily.medium,
     marginBottom: spacing.md,
   },
@@ -205,6 +204,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: spacing.md,
+  },
+  createBtnDisabled: {
+    opacity: 0.4,
   },
   createPlaylistRow: {
     flexDirection: 'row',
@@ -260,10 +262,10 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     color: colors.textMuted,
-    fontSize: typography.sizes.sub,
+    fontSize: typography.sizes.bodySmall,
     textAlign: 'center',
     marginTop: spacing.xl,
   },
 });
 
-export default PlaylistPicker;
+export default React.memo(PlaylistPicker);

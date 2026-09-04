@@ -4,13 +4,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Artwork from './Artwork';
 import ScalePress from './ScalePress';
-import { colors, typography, radius, spacing, shadows } from '../theme';
+import { colors, typography, radius, spacing } from '../theme';
 
-const NAVBAR_HEIGHT = 74;
+const NAVBAR_HEIGHT = 64;
 
-/**
- * Premium mini player that floats above the bottom navigation.
- */
 const BottomPlayer = ({ song, isPlaying, onTogglePlay, onPlayNext, progress = 0, onPress }) => {
   const insets = useSafeAreaInsets();
   const appear = useRef(new Animated.Value(0)).current;
@@ -33,35 +30,31 @@ const BottomPlayer = ({ song, isPlaying, onTogglePlay, onPlayNext, progress = 0,
         {
           bottom: NAVBAR_HEIGHT + insets.bottom + spacing.sm,
           opacity: appear,
-          transform: [{ translateY: appear.interpolate({ inputRange: [0, 1], outputRange: [24, 0] }) }],
+          transform: [{ translateY: appear.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }],
         },
       ]}
     >
       <ScalePress onPress={onPress} style={styles.press} activeScale={0.98}>
         <View style={styles.container}>
-          <Artwork uri={song.artwork} size={52} shape="rounded" overlay={false} />
+          <Artwork uri={song.artwork} size={48} shape="sm" />
           <View style={styles.info}>
-            <Text style={styles.title} numberOfLines={1}>
-              {song.title}
-            </Text>
-            <Text style={styles.artist} numberOfLines={1}>
-              {song.artist}
-            </Text>
+            <Text style={styles.title} numberOfLines={1}>{song.title}</Text>
+            <Text style={styles.artist} numberOfLines={1}>{song.artist}</Text>
           </View>
           <View style={styles.controls}>
             <ScalePress onPress={onTogglePlay} accessibilityLabel={isPlaying ? 'Pause' : 'Play'}>
               <View style={styles.playBtn}>
                 <Ionicons
                   name={isPlaying ? 'pause' : 'play'}
-                  size={20}
+                  size={18}
                   color={colors.textOnAccent}
-                  style={isPlaying ? undefined : { marginLeft: 2 }}
+                  style={!isPlaying ? { marginLeft: 2 } : undefined}
                 />
               </View>
             </ScalePress>
             <ScalePress onPress={onPlayNext} accessibilityLabel="Next track">
               <View style={styles.nextBtn}>
-                <Ionicons name="play-forward" size={18} color={colors.textPrimary} />
+                <Ionicons name="play-forward" size={16} color={colors.textPrimary} />
               </View>
             </ScalePress>
           </View>
@@ -92,7 +85,6 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
     paddingRight: spacing.md,
     overflow: 'hidden',
-    ...shadows.medium,
   },
   info: {
     flex: 1,
@@ -101,11 +93,11 @@ const styles = StyleSheet.create({
   },
   title: {
     color: colors.textPrimary,
-    fontSize: typography.sizes.sub,
+    fontSize: typography.sizes.bodySmall,
     fontFamily: typography.fontFamily.semibold,
   },
   artist: {
-    color: colors.textSecondary,
+    color: colors.textMuted,
     fontSize: typography.sizes.caption,
     fontFamily: typography.fontFamily.body,
     marginTop: 2,
@@ -115,19 +107,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   playBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: spacing.sm,
   },
   nextBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.backgroundSecondary,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.card,
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: spacing.sm,
@@ -137,9 +129,9 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     height: 2,
-    backgroundColor: colors.accentDeep,
+    backgroundColor: colors.accent,
     borderTopRightRadius: 2,
   },
 });
 
-export default BottomPlayer;
+export default React.memo(BottomPlayer);

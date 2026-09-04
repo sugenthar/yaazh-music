@@ -1,5 +1,6 @@
 /**
  * Yaazh Music – typography system.
+ * Inter for all functional text, DM Serif Display for hero moments.
  */
 export const typography = {
   fontFamily: {
@@ -11,24 +12,26 @@ export const typography = {
   },
 
   sizes: {
-    hero: 38,
-    large: 30,
+    hero: 36,
+    titleLarge: 28,
     title: 24,
-    section: 20,
+    subtitle: 20,
     body: 16,
-    sub: 14,
+    bodySmall: 14,
     caption: 12,
+    label: 11,
     micro: 10,
   },
 
   lineHeights: {
-    hero: 44,
-    large: 36,
+    hero: 42,
+    titleLarge: 34,
     title: 30,
-    section: 26,
-    body: 24,
-    sub: 20,
+    subtitle: 26,
+    body: 22,
+    bodySmall: 20,
     caption: 16,
+    label: 15,
     micro: 14,
   },
 

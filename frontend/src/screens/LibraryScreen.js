@@ -3,6 +3,7 @@ import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 import Header from '../components/Header';
 import SongCard from '../components/SongCard';
+import EmptyState from '../components/EmptyState';
 import { usePlayer } from '../player/PlayerContext';
 import { useLibrary } from '../store/LibraryContext';
 import { useMusic } from '../store/MusicContext';
@@ -41,7 +42,7 @@ const LibraryScreen = ({ openMenu, onOpenAuth }) => {
             accessibilityLabel={`Open playlist ${playlist.name}`}
           >
             <View style={styles.playlistArtwork}>
-              <Ionicons name="musical-notes" size={20} color={colors.accent} />
+              <Ionicons name="musical-notes" size={20} color={colors.textMuted} />
             </View>
             <View style={styles.rowInfo}>
               <Text style={styles.libTitle} numberOfLines={1}>{playlist.name}</Text>
@@ -51,13 +52,11 @@ const LibraryScreen = ({ openMenu, onOpenAuth }) => {
           </TouchableOpacity>
         ))
       ) : (
-        <View style={styles.centerSection}>
-          <View style={styles.emptyIcon}>
-            <Ionicons name="folder-open-outline" size={40} color={colors.textMuted} />
-          </View>
-          <Text style={styles.emptyTitle}>{STRINGS.library.noPlaylists}</Text>
-          <Text style={styles.emptyHint}>{STRINGS.library.noPlaylistsHint}</Text>
-        </View>
+        <EmptyState
+          icon="folder-open-outline"
+          title={STRINGS.library.noPlaylists}
+          description={STRINGS.library.noPlaylistsHint}
+        />
       )}
     </View>
   );
@@ -65,7 +64,7 @@ const LibraryScreen = ({ openMenu, onOpenAuth }) => {
   const renderPlaylistDetail = (playlist) => (
     <View style={styles.listSection}>
       <TouchableOpacity style={styles.backRow} onPress={() => setSelectedPlaylist(null)} accessibilityRole="button" accessibilityLabel="Back to playlists">
-        <Ionicons name="chevron-back" size={20} color={colors.accent} />
+        <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
         <Text style={styles.backText}>{STRINGS.library.backToPlaylists}</Text>
       </TouchableOpacity>
 
@@ -100,12 +99,10 @@ const LibraryScreen = ({ openMenu, onOpenAuth }) => {
           />
         ))
       ) : (
-        <View style={styles.centerSection}>
-          <View style={styles.emptyIcon}>
-            <Ionicons name="musical-notes-outline" size={40} color={colors.textMuted} />
-          </View>
-          <Text style={styles.emptyTitle}>{STRINGS.library.emptyPlaylist}</Text>
-        </View>
+        <EmptyState
+          icon="musical-notes-outline"
+          title={STRINGS.library.emptyPlaylist}
+        />
       )}
     </View>
   );
@@ -119,11 +116,12 @@ const LibraryScreen = ({ openMenu, onOpenAuth }) => {
           <TouchableOpacity
             key={filter}
             onPress={() => resetView(filter)}
+            style={[libFilter === filter && !showOnlyLiked ? styles.pillActive : styles.pillInactive]}
             accessibilityRole="button"
             accessibilityState={{ selected: libFilter === filter && !showOnlyLiked }}
             accessibilityLabel={filter}
           >
-            <Text style={libFilter === filter && !showOnlyLiked ? styles.pillActive : styles.pillInactive}>
+            <Text style={libFilter === filter && !showOnlyLiked ? styles.pillTextActive : styles.pillTextInactive}>
               {filter}
             </Text>
           </TouchableOpacity>
@@ -142,7 +140,7 @@ const LibraryScreen = ({ openMenu, onOpenAuth }) => {
           accessibilityLabel={STRINGS.library.likedSongs}
         >
           <View style={[styles.likedSongsArtwork, showOnlyLiked && styles.likedSongsArtworkActive]}>
-            <Ionicons name="heart" size={20} color={showOnlyLiked ? colors.background : colors.accent} />
+            <Ionicons name="heart" size={20} color={showOnlyLiked ? colors.textOnAccent : colors.textPrimary} />
           </View>
           <View style={styles.rowInfo}>
             <Text style={[styles.libTitle, showOnlyLiked && styles.libTitleActive]}>
@@ -150,19 +148,17 @@ const LibraryScreen = ({ openMenu, onOpenAuth }) => {
             </Text>
             <Text style={styles.libSub}>{likedSongs.length} songs</Text>
           </View>
-          {showOnlyLiked && <Ionicons name="checkmark-circle" size={18} color={colors.accent} />}
+          {showOnlyLiked ? <Ionicons name="checkmark-circle" size={18} color={colors.accent} /> : null}
         </TouchableOpacity>
       </View>
 
       {libFilter === 'Playlists' ? (
         selectedPlaylist ? renderPlaylistDetail(selectedPlaylist) : renderPlaylists()
       ) : libFilter === 'Artists' || libFilter === 'Albums' ? (
-        <View style={[styles.centerSection, styles.centerSectionNoTop]}>
-          <View style={styles.emptyIcon}>
-            <Ionicons name={libFilter === 'Artists' ? 'people-outline' : 'albums-outline'} size={40} color={colors.textMuted} />
-          </View>
-          <Text style={styles.emptyTitle}>{STRINGS.library.emptySection(libFilter)}</Text>
-        </View>
+        <EmptyState
+          icon={libFilter === 'Artists' ? 'people-outline' : 'albums-outline'}
+          title={STRINGS.library.emptySection(libFilter)}
+        />
       ) : (
         <View style={styles.listSection}>
           {filteredSongs.length > 0 ? (
@@ -177,13 +173,11 @@ const LibraryScreen = ({ openMenu, onOpenAuth }) => {
               />
             ))
           ) : (
-            <View style={styles.centerSection}>
-              <View style={styles.emptyIcon}>
-                <Ionicons name="heart-dislike-outline" size={40} color={colors.textMuted} />
-              </View>
-              <Text style={styles.emptyTitle}>{showOnlyLiked ? STRINGS.library.noLiked : STRINGS.library.noLiked}</Text>
-              <Text style={styles.emptyHint}>{STRINGS.library.noLikedHint}</Text>
-            </View>
+            <EmptyState
+              icon="heart-dislike-outline"
+              title={showOnlyLiked ? STRINGS.library.noLiked : STRINGS.library.noLiked}
+              description={STRINGS.library.noLikedHint}
+            />
           )}
         </View>
       )}
@@ -193,7 +187,7 @@ const LibraryScreen = ({ openMenu, onOpenAuth }) => {
 
 const styles = StyleSheet.create({
   content: {
-    paddingBottom: 150,
+    paddingBottom: 160,
   },
   pillRow: {
     flexDirection: 'row',
@@ -203,27 +197,29 @@ const styles = StyleSheet.create({
   },
   pillActive: {
     backgroundColor: colors.accent,
-    color: colors.textOnAccent,
     paddingVertical: 7,
     paddingHorizontal: 16,
-    borderRadius: radius.pill,
-    overflow: 'hidden',
-    fontFamily: typography.fontFamily.semibold,
-    fontSize: typography.sizes.sub,
+    borderRadius: 999,
     marginRight: spacing.sm,
   },
   pillInactive: {
     backgroundColor: colors.card,
-    color: colors.textSecondary,
     paddingVertical: 7,
     paddingHorizontal: 16,
-    borderRadius: radius.pill,
-    overflow: 'hidden',
-    fontSize: typography.sizes.sub,
-    fontFamily: typography.fontFamily.body,
+    borderRadius: 999,
     marginRight: spacing.sm,
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  pillTextActive: {
+    color: colors.textOnAccent,
+    fontFamily: typography.fontFamily.semibold,
+    fontSize: typography.sizes.bodySmall,
+  },
+  pillTextInactive: {
+    color: colors.textSecondary,
+    fontSize: typography.sizes.bodySmall,
+    fontFamily: typography.fontFamily.body,
   },
   listSection: {
     paddingHorizontal: spacing.lg,
@@ -233,6 +229,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: spacing.lg,
+    minHeight: 52,
   },
   likedSongsArtwork: {
     width: 48,
@@ -273,42 +270,9 @@ const styles = StyleSheet.create({
   },
   libSub: {
     color: colors.textMuted,
-    fontSize: typography.sizes.sub,
+    fontSize: typography.sizes.bodySmall,
     fontFamily: typography.fontFamily.body,
     marginTop: 2,
-  },
-  centerSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 70,
-    paddingHorizontal: spacing.xxl,
-  },
-  centerSectionNoTop: {
-    paddingTop: 40,
-  },
-  emptyIcon: {
-    width: 72,
-    height: 72,
-    borderRadius: radius.lg,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyTitle: {
-    color: colors.textPrimary,
-    fontSize: typography.sizes.title,
-    fontFamily: typography.fontFamily.display,
-    textAlign: 'center',
-    marginTop: spacing.lg,
-  },
-  emptyHint: {
-    color: colors.textMuted,
-    fontSize: typography.sizes.sub,
-    fontFamily: typography.fontFamily.body,
-    textAlign: 'center',
-    marginTop: spacing.sm,
   },
   backRow: {
     flexDirection: 'row',
@@ -317,7 +281,7 @@ const styles = StyleSheet.create({
   },
   backText: {
     color: colors.textSecondary,
-    fontSize: typography.sizes.sub,
+    fontSize: typography.sizes.bodySmall,
     fontFamily: typography.fontFamily.medium,
     marginLeft: spacing.sm,
   },
@@ -332,8 +296,8 @@ const styles = StyleSheet.create({
   },
   playlistDetailTitle: {
     color: colors.textPrimary,
-    fontSize: typography.sizes.large,
-    fontFamily: typography.fontFamily.display,
+    fontSize: typography.sizes.titleLarge,
+    fontFamily: typography.fontFamily.semibold,
     letterSpacing: typography.letterSpacing.tight,
   },
   deleteRow: {
@@ -341,14 +305,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: radius.pill,
-    backgroundColor: 'rgba(201,106,75,0.12)',
+    borderRadius: 999,
     borderWidth: 1,
-    borderColor: 'rgba(201,106,75,0.3)',
+    borderColor: 'rgba(255,68,68,0.3)',
   },
   deleteText: {
     color: colors.error,
-    fontSize: typography.sizes.sub,
+    fontSize: typography.sizes.bodySmall,
     fontFamily: typography.fontFamily.medium,
     marginLeft: spacing.xs,
   },

@@ -1,14 +1,12 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useMusic } from '../store/MusicContext';
 import ArtworkHero from '../components/ArtworkHero';
 import PrimaryButton from '../components/PrimaryButton';
-import { colors, typography, spacing, radius } from '../theme';
+import { colors, typography, spacing } from '../theme';
 
-const fallbackArtwork =
-  'https://upload.wikimedia.org/wikipedia/en/7/77/Leo_film_poster.jpg';
+const fallbackArtwork = 'https://upload.wikimedia.org/wikipedia/en/7/77/Leo_film_poster.jpg';
 
 const OnboardingScreen = ({ onSkip, onSignUp, onLogin }) => {
   const insets = useSafeAreaInsets();
@@ -16,18 +14,13 @@ const OnboardingScreen = ({ onSkip, onSignUp, onLogin }) => {
   const artwork = songs?.[0]?.artwork || fallbackArtwork;
 
   return (
-    <LinearGradient
-      colors={['#191815', '#11110F', '#11110F']}
-      style={[styles.container, { paddingTop: insets.top + spacing.lg }]}
-    >
+    <View style={[styles.container, { paddingTop: insets.top + spacing.lg, backgroundColor: colors.background }]}>
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.huge }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.topRow}>
-          <View>
-            <Text style={styles.brandEyebrow}>YAழH MUSIC</Text>
-          </View>
+          <Text style={styles.brandEyebrow}>YAAZH MUSIC</Text>
           <TouchableOpacity
             onPress={onSkip}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -39,8 +32,7 @@ const OnboardingScreen = ({ onSkip, onSignUp, onLogin }) => {
         </View>
 
         <View style={styles.heroArea}>
-          <View style={styles.heroGlow} pointerEvents="none" />
-          <ArtworkHero uri={artwork} size={260} shape="blob" />
+          <ArtworkHero uri={artwork} size={260} shape="rounded" />
         </View>
 
         <View style={styles.bottom}>
@@ -59,7 +51,7 @@ const OnboardingScreen = ({ onSkip, onSignUp, onLogin }) => {
           </TouchableOpacity>
         </View>
       </ScrollView>
-    </LinearGradient>
+    </View>
   );
 };
 
@@ -77,14 +69,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   brandEyebrow: {
-    color: colors.accent,
+    color: colors.textMuted,
     fontSize: typography.sizes.caption,
     fontFamily: typography.fontFamily.semibold,
     letterSpacing: typography.letterSpacing.caps,
   },
   skip: {
     color: colors.textSecondary,
-    fontSize: typography.sizes.sub,
+    fontSize: typography.sizes.bodySmall,
     fontFamily: typography.fontFamily.medium,
   },
   heroArea: {
@@ -93,13 +85,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: spacing.huge,
     minHeight: 340,
-  },
-  heroGlow: {
-    position: 'absolute',
-    width: 340,
-    height: 340,
-    borderRadius: 170,
-    backgroundColor: colors.warmGlow,
   },
   bottom: {
     alignItems: 'flex-start',
@@ -129,7 +114,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   loginText: {
-    color: colors.accent,
+    color: colors.textPrimary,
     fontSize: typography.sizes.body,
     fontFamily: typography.fontFamily.medium,
   },

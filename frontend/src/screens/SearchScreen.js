@@ -18,12 +18,12 @@ import { colors, typography, radius, spacing } from '../theme';
 import { STRINGS } from '../constants/strings';
 
 const CATEGORIES = [
-  { id: '1', title: 'Tamil Classics', artwork: 'https://upload.wikimedia.org/wikipedia/en/3/30/Jailer_2023_Tamil_film_poster.jpg', color: '#8D67AB' },
-  { id: '2', title: 'Pop', artwork: 'https://images.unsplash.com/photo-1514525253440-b393452e8d26?w=300', color: '#0D72EA' },
-  { id: '3', title: 'Charts', artwork: 'https://images.unsplash.com/photo-1576525869588-e32a8db20ec3?w=300', color: '#BC5900' },
-  { id: '4', title: 'Made For You', artwork: 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=300', color: '#1E3264' },
-  { id: '5', title: 'New Releases', artwork: 'https://images.unsplash.com/photo-1493224272065-c3e02398ebd9?w=300', color: '#E8115B' },
-  { id: '6', title: 'Live', artwork: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=300', color: '#8400E7' },
+  { id: '1', title: 'Tamil Classics', artwork: 'https://upload.wikimedia.org/wikipedia/en/3/30/Jailer_2023_Tamil_film_poster.jpg' },
+  { id: '2', title: 'Pop', artwork: 'https://images.unsplash.com/photo-1514525253440-b393452e8d26?w=300' },
+  { id: '3', title: 'Charts', artwork: 'https://images.unsplash.com/photo-1576525869588-e32a8db20ec3?w=300' },
+  { id: '4', title: 'Made For You', artwork: 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=300' },
+  { id: '5', title: 'New Releases', artwork: 'https://images.unsplash.com/photo-1493224272065-c3e02398ebd9?w=300' },
+  { id: '6', title: 'Live', artwork: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=300' },
 ];
 
 const SUGGESTIONS = ['Anirudh', 'Hukum', 'Badass', 'Mallipoo', 'Night', 'Focus', 'Jailer'];
@@ -226,7 +226,7 @@ const SearchScreen = ({ openMenu, onOpenAuth }) => {
         </>
       )}
 
-      {isSearching && artists.length > 0 && (
+      {isSearching && artists.length > 0 ? (
         <View style={styles.listSection}>
           <View style={styles.group}>
             <Text style={styles.groupTitle}>{STRINGS.search.artists}</Text>
@@ -241,22 +241,22 @@ const SearchScreen = ({ openMenu, onOpenAuth }) => {
             ))}
           </View>
         </View>
-      )}
+      ) : null}
 
-      {isSearching && results.length > 0 && (
+      {isSearching && results.length > 0 ? (
         <View style={styles.listSection}>
           <Text style={styles.groupTitle}>{STRINGS.search.songs}</Text>
         </View>
-      )}
+      ) : null}
 
-      {showEmpty && (
+      {showEmpty ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyTitle}>{STRINGS.search.noResults}</Text>
           <Text style={styles.emptyHint}>{STRINGS.search.emptyHint}</Text>
         </View>
-      )}
+      ) : null}
 
-      {error && (
+      {error ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyTitle}>{error}</Text>
           <TouchableOpacity
@@ -267,7 +267,7 @@ const SearchScreen = ({ openMenu, onOpenAuth }) => {
             <Text style={styles.retryText}>{STRINGS.search.retry}</Text>
           </TouchableOpacity>
         </View>
-      )}
+      ) : null}
     </View>
   );
 
@@ -289,7 +289,7 @@ const SearchScreen = ({ openMenu, onOpenAuth }) => {
     if (loading || loadingMore) {
       return (
         <View style={styles.footer}>
-          <ActivityIndicator size="small" color={colors.accent} />
+          <ActivityIndicator size="small" color={colors.textMuted} />
         </View>
       );
     }
@@ -337,7 +337,7 @@ const SearchScreen = ({ openMenu, onOpenAuth }) => {
               if (q) loadPage(q, 1, 'replace');
             }}
           />
-          {searchQuery.length > 0 && (
+          {searchQuery.length > 0 ? (
             <TouchableOpacity
               onPress={() => setSearchQuery('')}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -346,7 +346,7 @@ const SearchScreen = ({ openMenu, onOpenAuth }) => {
             >
               <Ionicons name="close-circle" size={20} color={colors.textMuted} />
             </TouchableOpacity>
-          )}
+          ) : null}
         </View>
       </View>
 
@@ -376,7 +376,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   content: {
-    paddingBottom: 150,
+    paddingBottom: 160,
   },
   headerContent: {
     width: '100%',
@@ -388,9 +388,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
-    height: 50,
-    borderRadius: radius.pill,
-    backgroundColor: colors.backgroundSecondary,
+    height: 48,
+    borderRadius: 999,
+    backgroundColor: colors.card,
     borderWidth: 1,
     borderColor: colors.border,
   },
@@ -419,9 +419,8 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     color: colors.textPrimary,
-    fontSize: typography.sizes.section,
-    fontFamily: typography.fontFamily.display,
-    letterSpacing: typography.letterSpacing.tight,
+    fontSize: typography.sizes.subtitle,
+    fontFamily: typography.fontFamily.semibold,
     paddingHorizontal: spacing.lg,
     marginBottom: spacing.lg,
   },
@@ -439,7 +438,7 @@ const styles = StyleSheet.create({
   chip: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    borderRadius: radius.pill,
+    borderRadius: 999,
     backgroundColor: colors.card,
     borderWidth: 1,
     borderColor: colors.border,
@@ -448,7 +447,7 @@ const styles = StyleSheet.create({
   },
   chipText: {
     color: colors.textSecondary,
-    fontSize: typography.sizes.sub,
+    fontSize: typography.sizes.bodySmall,
     fontFamily: typography.fontFamily.medium,
   },
   rowWrap: {
@@ -468,20 +467,20 @@ const styles = StyleSheet.create({
   },
   moreErrorText: {
     color: colors.textMuted,
-    fontSize: typography.sizes.sub,
+    fontSize: typography.sizes.bodySmall,
     fontFamily: typography.fontFamily.body,
     marginBottom: spacing.md,
   },
   footerRetry: {
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.sm,
-    borderRadius: radius.pill,
+    borderRadius: 999,
     borderWidth: 1,
-    borderColor: colors.accent,
+    borderColor: colors.borderStrong,
   },
   footerRetryText: {
-    color: colors.accent,
-    fontSize: typography.sizes.sub,
+    color: colors.textPrimary,
+    fontSize: typography.sizes.bodySmall,
     fontFamily: typography.fontFamily.semibold,
   },
   emptyState: {
@@ -492,11 +491,11 @@ const styles = StyleSheet.create({
   emptyTitle: {
     color: colors.textPrimary,
     fontSize: typography.sizes.title,
-    fontFamily: typography.fontFamily.display,
+    fontFamily: typography.fontFamily.semibold,
   },
   emptyHint: {
     color: colors.textMuted,
-    fontSize: typography.sizes.sub,
+    fontSize: typography.sizes.bodySmall,
     fontFamily: typography.fontFamily.body,
     textAlign: 'center',
     marginTop: spacing.sm,
@@ -505,12 +504,12 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.md,
-    borderRadius: radius.pill,
+    borderRadius: 999,
     backgroundColor: colors.accent,
   },
   retryText: {
-    color: colors.background,
-    fontSize: typography.sizes.sub,
+    color: colors.textOnAccent,
+    fontSize: typography.sizes.bodySmall,
     fontFamily: typography.fontFamily.semibold,
   },
 });

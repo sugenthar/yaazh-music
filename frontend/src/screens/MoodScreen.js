@@ -6,18 +6,16 @@ import PrimaryButton from '../components/PrimaryButton';
 import { usePlayer } from '../player/PlayerContext';
 import { useMusic } from '../store/MusicContext';
 import SongsService from '../services/songs';
-import { colors, typography, radius, spacing, shadows } from '../theme';
+import { colors, typography, radius, spacing } from '../theme';
 import { STRINGS } from '../constants/strings';
 
 const FALLBACK_MOODS = [
-  { id: 'local-1', text: "Late night drives and this playlist are a therapy session", user: "Alex", color: '#7358FF', song: 'Nightcall' },
-  { id: 'local-2', text: "Finding peace in the chaos.", user: "Sarah", color: '#C3AE8F', song: null },
-  { id: 'local-3', text: "Bass so heavy I can't feel my face", user: "Mike", color: '#0D72EA', song: 'Hukum' },
-  { id: 'local-4', text: "Nostalgia hitting hard today.", user: "Priya", color: '#8D67AB', song: 'Mallipoo' },
-  { id: 'local-5', text: "Coding flow state activated.", user: "You", color: '#BC5900', song: null },
+  { id: 'local-1', text: "Late night drives and this playlist are a therapy session", user: "Alex", song: 'Nightcall' },
+  { id: 'local-2', text: "Finding peace in the chaos.", user: "Sarah", song: null },
+  { id: 'local-3', text: "Bass so heavy I can't feel my face", user: "Mike", song: 'Hukum' },
+  { id: 'local-4', text: "Nostalgia hitting hard today.", user: "Priya", song: 'Mallipoo' },
+  { id: 'local-5', text: "Coding flow state activated.", user: "You", song: null },
 ];
-
-const MOOD_COLORS = ['#D8C5A8', '#7358FF', '#0D72EA', '#BC5900', '#8D67AB', '#C36B8B'];
 
 const MoodScreen = ({ onOpenAuth }) => {
   const { currentSong } = usePlayer();
@@ -30,7 +28,7 @@ const MoodScreen = ({ onOpenAuth }) => {
     let mounted = true;
     SongsService.fetchMoods().then(remote => {
       if (mounted && remote && remote.length > 0) {
-        setMoods(remote.map((m, i) => ({ ...m, color: MOOD_COLORS[i % MOOD_COLORS.length] })));
+        setMoods(remote);
         setActiveMood(m => m ? m : remote[0]);
       }
     });
@@ -50,10 +48,8 @@ const MoodScreen = ({ onOpenAuth }) => {
       id: `local-${Date.now()}`,
       text: newMoodText,
       user: 'You',
-      color: MOOD_COLORS[0],
       song: currentSong ? currentSong.title : null,
     };
-    if (createdMood.color) createdMood.color = MOOD_COLORS[(moods.length) % MOOD_COLORS.length];
     setMoods(prev => [createdMood, ...prev]);
     setActiveMood(createdMood);
     setNewMoodText('');
@@ -70,7 +66,7 @@ const MoodScreen = ({ onOpenAuth }) => {
           <Text style={styles.composerLabel}>{STRINGS.mood.createPrompt}</Text>
           <TextInput
             style={styles.moodInput}
-            placeholder="I'm feeling…"
+            placeholder="I'm feeling\u2026"
             placeholderTextColor={colors.textMuted}
             multiline
             autoFocus
@@ -79,12 +75,12 @@ const MoodScreen = ({ onOpenAuth }) => {
             maxLength={140}
             accessibilityLabel="Mood text"
           />
-          {currentSong && (
+          {currentSong ? (
             <View style={styles.songTag}>
-              <Ionicons name="musical-notes" size={14} color={colors.accent} />
+              <Ionicons name="musical-notes" size={14} color={colors.textMuted} />
               <Text style={styles.songTagText}>{STRINGS.mood.listeningTo(currentSong.title)}</Text>
             </View>
-          )}
+          ) : null}
           <View style={styles.composerActions}>
             <TouchableOpacity onPress={() => { setIsCreating(false); setNewMoodText(''); }} accessibilityRole="button" accessibilityLabel={STRINGS.mood.cancel}>
               <Text style={styles.cancelText}>{STRINGS.mood.cancel}</Text>
@@ -127,7 +123,7 @@ const MoodScreen = ({ onOpenAuth }) => {
           const initial = (item.user || '?')[0].toUpperCase();
           return (
             <TouchableOpacity
-              style={[styles.circle, { backgroundColor: item.color || colors.elevated }, active && styles.circleActive]}
+              style={[styles.circle, active && styles.circleActive]}
               onPress={() => setActiveMood(item)}
               activeOpacity={0.8}
               accessibilityRole="button"
@@ -142,15 +138,13 @@ const MoodScreen = ({ onOpenAuth }) => {
       {activeMood ? (
         <View style={styles.moodBox}>
           <View style={styles.moodHeader}>
-            <Text style={[styles.userText, { color: activeMood.color || colors.accent }]}>
-              @{activeMood.user}
-            </Text>
+            <Text style={styles.userText}>@{activeMood.user}</Text>
             <Ionicons name="sparkles" size={14} color={colors.textMuted} />
           </View>
           <Text style={styles.moodText}>{activeMood.text}</Text>
           {activeMood.song ? (
             <View style={styles.songTag}>
-              <Ionicons name="musical-notes" size={14} color={colors.accent} />
+              <Ionicons name="musical-notes" size={14} color={colors.textMuted} />
               <Text style={styles.songTagText}>{STRINGS.mood.listeningTo(activeMood.song)}</Text>
             </View>
           ) : null}
@@ -168,9 +162,9 @@ const MoodScreen = ({ onOpenAuth }) => {
             style={styles.presetChip}
             onPress={() => {
               const tagged = activeMood && activeMood.song
-                ? `Listening to ${activeMood.song} — ${preset}`
+                ? `Listening to ${activeMood.song} \u2014 ${preset}`
                 : preset;
-              setActiveMood({ id: `preset-${preset}`, text: tagged, user: 'Yaazh', color: '#D8C5A8', song: null });
+              setActiveMood({ id: `preset-${preset}`, text: tagged, user: 'Yaazh', song: null });
             }}
             accessibilityRole="button"
             accessibilityLabel={preset}
@@ -189,7 +183,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   content: {
-    paddingBottom: 150,
+    paddingBottom: 160,
   },
   createBtn: {
     flexDirection: 'row',
@@ -197,13 +191,13 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    borderRadius: radius.pill,
+    borderRadius: 999,
     backgroundColor: colors.accent,
     marginTop: spacing.md,
   },
   createBtnText: {
     color: colors.textOnAccent,
-    fontSize: typography.sizes.sub,
+    fontSize: typography.sizes.bodySmall,
     fontFamily: typography.fontFamily.semibold,
     marginLeft: spacing.xs,
   },
@@ -220,38 +214,33 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   circle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: spacing.md,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1.5,
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.elevated,
   },
   circleActive: {
-    borderWidth: 2,
     borderColor: colors.accent,
-    shadowColor: colors.accent,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 4,
+    backgroundColor: colors.card,
   },
   circleText: {
-    color: '#11110F',
-    fontSize: typography.sizes.section,
-    fontFamily: typography.fontFamily.bold,
+    color: colors.textPrimary,
+    fontSize: typography.sizes.subtitle,
+    fontFamily: typography.fontFamily.semibold,
   },
   moodBox: {
     backgroundColor: colors.card,
     borderRadius: radius.lg,
     padding: spacing.xl,
     margin: spacing.lg,
-    minHeight: 180,
+    minHeight: 160,
     borderWidth: 1,
     borderColor: colors.border,
-    ...shadows.soft,
   },
   moodHeader: {
     flexDirection: 'row',
@@ -260,16 +249,17 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   userText: {
-    fontSize: typography.sizes.sub,
-    fontFamily: typography.fontFamily.bold,
+    color: colors.textSecondary,
+    fontSize: typography.sizes.bodySmall,
+    fontFamily: typography.fontFamily.semibold,
     letterSpacing: typography.letterSpacing.wide,
     textTransform: 'uppercase',
   },
   moodText: {
     color: colors.textPrimary,
-    fontSize: typography.sizes.large,
+    fontSize: typography.sizes.titleLarge,
     fontFamily: typography.fontFamily.display,
-    lineHeight: typography.lineHeights.large,
+    lineHeight: typography.lineHeights.titleLarge,
     letterSpacing: typography.letterSpacing.tight,
   },
   songTag: {
@@ -279,8 +269,8 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    backgroundColor: colors.backgroundSecondary,
-    borderRadius: radius.pill,
+    backgroundColor: colors.elevated,
+    borderRadius: 999,
     borderWidth: 1,
     borderColor: colors.border,
   },
@@ -295,7 +285,7 @@ const styles = StyleSheet.create({
   },
   selectPromptText: {
     color: colors.textMuted,
-    fontSize: typography.sizes.sub,
+    fontSize: typography.sizes.bodySmall,
     fontFamily: typography.fontFamily.body,
   },
   presets: {
@@ -307,8 +297,8 @@ const styles = StyleSheet.create({
   presetChip: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    borderRadius: radius.pill,
-    backgroundColor: colors.backgroundSecondary,
+    borderRadius: 999,
+    backgroundColor: colors.elevated,
     borderWidth: 1,
     borderColor: colors.border,
     marginRight: spacing.sm,
@@ -316,7 +306,7 @@ const styles = StyleSheet.create({
   },
   presetText: {
     color: colors.textSecondary,
-    fontSize: typography.sizes.sub,
+    fontSize: typography.sizes.bodySmall,
     fontFamily: typography.fontFamily.medium,
   },
   composer: {
@@ -326,15 +316,15 @@ const styles = StyleSheet.create({
   },
   composerLabel: {
     color: colors.textSecondary,
-    fontSize: typography.sizes.sub,
+    fontSize: typography.sizes.bodySmall,
     fontFamily: typography.fontFamily.body,
     marginBottom: spacing.md,
   },
   moodInput: {
     color: colors.textPrimary,
-    fontSize: typography.sizes.large,
+    fontSize: typography.sizes.titleLarge,
     fontFamily: typography.fontFamily.display,
-    lineHeight: typography.lineHeights.large,
+    lineHeight: typography.lineHeights.titleLarge,
     textAlignVertical: 'top',
     minHeight: 140,
     borderBottomWidth: 1,

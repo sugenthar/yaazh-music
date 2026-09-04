@@ -1,5 +1,6 @@
 /**
  * Yaazh Music – spacing scale.
+ * Consistent 4px base unit.
  */
 export const spacing = {
   xs: 4,

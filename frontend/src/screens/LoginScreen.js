@@ -10,7 +10,6 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../store/AuthContext';
 import { useMusic } from '../store/MusicContext';
@@ -80,7 +79,7 @@ const LoginScreen = ({ visible = false, onClose, onSuccess, onGoSignUp }) => {
 
   return (
     <Modal visible={visible} transparent={false} animationType="slide" onRequestClose={handleClose}>
-      <LinearGradient colors={['#191815', '#11110F']} style={styles.container}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.flex}
@@ -101,13 +100,7 @@ const LoginScreen = ({ visible = false, onClose, onSuccess, onGoSignUp }) => {
             </TouchableOpacity>
 
             <View style={styles.artSection}>
-              <View style={styles.artGlow} pointerEvents="none" />
-              <LinearGradient
-                colors={['rgba(217,197,168,0.16)', 'rgba(216,197,168,0.02)']}
-                style={styles.artWash}
-              />
-              <ArtworkHero uri={artwork} size={200} shape="blob" />
-              <View style={styles.curveContour} pointerEvents="none" />
+              <ArtworkHero uri={artwork} size={180} shape="rounded" />
             </View>
 
             <View style={styles.formSection}>
@@ -174,28 +167,13 @@ const LoginScreen = ({ visible = false, onClose, onSuccess, onGoSignUp }) => {
               {socialNotice ? <Text style={styles.socialNotice}>{socialNotice}</Text> : null}
 
               <View style={styles.socialRow}>
-                <TouchableOpacity
-                  style={styles.socialBtn}
-                  onPress={handleSocial}
-                  accessibilityRole="button"
-                  accessibilityLabel="Continue with Google"
-                >
+                <TouchableOpacity style={styles.socialBtn} onPress={handleSocial} accessibilityRole="button" accessibilityLabel="Continue with Google">
                   <Ionicons name="logo-google" size={20} color={colors.textPrimary} />
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.socialBtn}
-                  onPress={handleSocial}
-                  accessibilityRole="button"
-                  accessibilityLabel="Continue with Apple"
-                >
+                <TouchableOpacity style={styles.socialBtn} onPress={handleSocial} accessibilityRole="button" accessibilityLabel="Continue with Apple">
                   <Ionicons name="logo-apple" size={20} color={colors.textPrimary} />
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.socialBtn}
-                  onPress={handleSocial}
-                  accessibilityRole="button"
-                  accessibilityLabel="Continue with Facebook"
-                >
+                <TouchableOpacity style={styles.socialBtn} onPress={handleSocial} accessibilityRole="button" accessibilityLabel="Continue with Facebook">
                   <Ionicons name="logo-facebook" size={20} color={colors.textPrimary} />
                 </TouchableOpacity>
               </View>
@@ -206,14 +184,15 @@ const LoginScreen = ({ visible = false, onClose, onSuccess, onGoSignUp }) => {
                 accessibilityRole="button"
                 accessibilityLabel="Sign up"
               >
-                <Text style={styles.switchText}>Don't have an account?{' '}
+                <Text style={styles.switchText}>
+                  Don't have an account?{' '}
                   <Text style={styles.switchLink}>Sign Up</Text>
                 </Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
-      </LinearGradient>
+      </View>
     </Modal>
   );
 };
@@ -234,7 +213,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.card,
+    backgroundColor: colors.elevated,
     borderWidth: 1,
     borderColor: colors.border,
     alignItems: 'center',
@@ -245,47 +224,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: spacing.xl,
   },
-  artGlow: {
-    position: 'absolute',
-    width: 240,
-    height: 240,
-    borderRadius: 120,
-    backgroundColor: colors.warmGlow,
-  },
-  artWash: {
-    position: 'absolute',
-    top: 0,
-    left: spacing.huge,
-    right: spacing.huge,
-    height: 220,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    borderBottomLeftRadius: radius.lg,
-    borderBottomRightRadius: radius.xxl,
-  },
-  curveContour: {
-    position: 'absolute',
-    bottom: 10,
-    width: 120,
-    height: 60,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderStrong,
-    borderBottomRightRadius: 60,
-    borderBottomLeftRadius: 60,
-    opacity: 0.6,
-  },
   formSection: {
     marginTop: spacing.sm,
   },
   heading: {
     color: colors.textPrimary,
-    fontSize: typography.sizes.large,
-    fontFamily: typography.fontFamily.display,
+    fontSize: typography.sizes.titleLarge,
+    fontFamily: typography.fontFamily.semibold,
     letterSpacing: typography.letterSpacing.tight,
   },
   subheading: {
     color: colors.textSecondary,
-    fontSize: typography.sizes.sub,
+    fontSize: typography.sizes.bodySmall,
     fontFamily: typography.fontFamily.body,
     marginTop: spacing.xs,
     marginBottom: spacing.xl,
@@ -300,23 +250,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   forgotText: {
-    color: colors.accent,
-    fontSize: typography.sizes.sub,
+    color: colors.textSecondary,
+    fontSize: typography.sizes.bodySmall,
     fontFamily: typography.fontFamily.medium,
   },
   errorBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(201,106,75,0.12)',
+    backgroundColor: 'rgba(255,68,68,0.10)',
     borderWidth: 1,
-    borderColor: 'rgba(201,106,75,0.3)',
+    borderColor: 'rgba(255,68,68,0.25)',
     borderRadius: radius.md,
     padding: spacing.md,
     marginBottom: spacing.md,
   },
   errorText: {
     color: colors.error,
-    fontSize: typography.sizes.sub,
+    fontSize: typography.sizes.bodySmall,
     fontFamily: typography.fontFamily.medium,
     marginLeft: spacing.sm,
     flex: 1,
@@ -358,7 +308,7 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: colors.card,
+    backgroundColor: colors.elevated,
     borderWidth: 1,
     borderColor: colors.border,
     alignItems: 'center',
@@ -372,11 +322,11 @@ const styles = StyleSheet.create({
   },
   switchText: {
     color: colors.textSecondary,
-    fontSize: typography.sizes.sub,
+    fontSize: typography.sizes.bodySmall,
     fontFamily: typography.fontFamily.body,
   },
   switchLink: {
-    color: colors.accent,
+    color: colors.textPrimary,
     fontFamily: typography.fontFamily.semibold,
   },
 });

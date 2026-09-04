@@ -1,6 +1,5 @@
 /**
- * Deprecated alias – prefer importing from '../theme'.
- * Kept so legacy modules that import COLORS keep working.
+ * Re-export from centralized theme.
  */
 import { colors } from '../theme/colors';
 
